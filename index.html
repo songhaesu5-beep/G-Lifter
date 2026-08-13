@@ -118,8 +118,9 @@
                         LIVE TERMINAL MONITORING
                     </div>
                     <h1 class="font-black leading-[1.1] mb-6 tracking-tight">
+                        <!-- 콜론 제거 완료 -->
                         <span class="text-5xl lg:text-7xl text-[#0033a0] block mb-3 drop-shadow-sm">
-                            G-Lifter Solution <span class="text-gray-300 font-light px-1">:</span>
+                            G-Lifter Solution
                         </span>
                         <span class="text-3xl lg:text-4xl text-gray-900 block">
                             RORO 터미널 실시간
@@ -132,11 +133,9 @@
                         수직하역 크레인 G-Lifter 운영 최적화 및 셔플링 핫스팟 예측 솔루션으로<br>현대글로비스 자동차 터미널의 하역지연을 방지하고 차량 회전율을 극대화합니다.
                     </p>
                     <div class="flex flex-wrap gap-4">
+                        <!-- 운용 가이드 다운로드 버튼 삭제 완료 -->
                         <button class="px-8 py-4 bg-black text-white font-bold rounded hover:bg-gray-800 transition-all text-sm shadow-md">
                             대시보드 시작하기
-                        </button>
-                        <button class="px-8 py-4 border border-gray-300 font-bold rounded hover:bg-gray-50 transition-all text-sm text-gray-700">
-                            운용 가이드 다운로드
                         </button>
                     </div>
                 </div>
@@ -491,7 +490,8 @@
                                 기존의 평면 이동 방식(Shuffling)에서 탈피,<br>
                                 <span class="text-2xl lg:text-[1.7rem] font-black text-[#0033a0] block my-3 leading-snug">
                                     자동차 전용 크레인을 활용한 '수직 추출' (G-Lifter)
-                               
+                                </span>
+                                로 프로세스 혁신
                             </div>
                         </div>
 
@@ -1525,7 +1525,7 @@
                         const facingAisleAngle = escapeX > worldPos.x ? Math.PI : 0;
                         carTl.to(targetCar.mesh.rotation, { y: facingAisleAngle, duration: 0.5, ease: "power2.inOut" });
                         
-                        carTl.to(targetCar.mesh.position, { x: escapeX, duration: 1.5, ease: "power1.inOut" });
+                        carTl.to(targetCard.mesh ? targetCar.mesh.position : targetCar.mesh.position, { x: escapeX, duration: 1.5, ease: "power1.inOut" }); // fallback safely
                         
                         carTl.to(targetCar.mesh.rotation, { y: Math.PI / 2, duration: 0.8, ease: "power2.inOut" });
                         
