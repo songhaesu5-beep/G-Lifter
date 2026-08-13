@@ -80,7 +80,10 @@ declare const XLSX: any;   // CDN(SheetJS) 전역 — vite 빌드에서는 타�
 const ZONES = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V'];
 const DEPTHS = [1,2,3,4,5];
 const BUNDLE_COUNT = 3, BUNDLE_ROWS = 5, BUNDLE_COLS = 22, PER_CELL = 330;
-const TIME_HUMAN = 2.3, TIME_GL = 0.8, TIME_MOVE = 2;
+const TIME_DIRECT = 1;              // 일반(Direct) 출고 1건
+const TIME_GL_SHUFFLE = 5;          // G-Lifter 셔플링 1건 (이동·인양 포함)
+const TIME_HUMAN_SHUFFLE = 10;      // 인간 셔플링 1건 (비교용)
+const G_REACH_COLS = 13;            // G-Lifter 커버 윈도우 폭 (5행×13열)
 const MAX_DISPATCH = 5000;
 
 // Bundle 실사 배치도: southport.jpeg는 3개 bundle을 좌→우로 보여주는 템플릿이다.
@@ -230,7 +233,8 @@ function buildSeverityRank(){
   }).forEach((c,i)=> severityRank[c.id] = i);
 }
 
-// 출고 실행 시: G-Lifter N대를 위험도(빨간색) 최상위 N개 셀에 배치
+// 출고 실행 시: G-Lifter N대를 위험도 최상위 셀부터 배치 (셀당 1대)
+// 이후 커버 구역(5×13열)에서 해소 후 다음 구역으로 직진 이동만 가능
 function initGlifters(){
   glifterState = [];
   [...cells].sort((a,b)=> severityRank[a.id]-severityRank[b.id]).slice(0, glifterCount())
@@ -252,22 +256,19 @@ function renderGlifterBoard(){
 }
 
 function renderTimeline(){
-  const el = $('gl-timeline');
   const evs = timeline.filter(ev=> ev.type === 'MOVE' || (ev.type === 'SHUFFLE' && ev.result === 'RESOLVED'));
-  if(!evs.length){
-    el.innerHTML = '<b>⏱️ G-Lifter 이동 타임라인:</b> 출고 실행 후 표시됩니다.';
-    return;
-  }
-  const lines = evs.slice(-100).map(ev=>{
-    if(ev.type === 'MOVE'){
-      return '<div><b>' + Math.round(ev.min) + '분</b> ' + ev.gl + ' 이동: <b>' + ev.from + '</b> → <b>' + ev.to + '</b></div>';
-    }
-    return '<div>✅ <b>' + Math.round(ev.min) + '분</b> ' + ev.gl + ' · <b>' + ev.cell + '</b> 셔플링 해소</div>';
-  }).join('');
-  el.innerHTML = '<b>⏱️ G-Lifter 이동 타임라인 (' + evs.length + '건):</b><br/>' + lines;
+  const row = (ev: any)=> ev.type === 'MOVE'
+    ? '<tr class="hover:bg-surface-container-low transition-colors"><td class="px-4 py-2 text-xs text-on-surface-variant">' + Math.round(ev.min) + '분</td><td class="px-4 py-2"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">' + ev.gl + '</span></td><td class="px-4 py-2">셔플링 이동</td><td class="px-4 py-2 font-mono text-xs">' + ev.from + '</td><td class="px-4 py-2 font-mono text-xs">' + ev.to + '</td><td class="px-4 py-2"><span class="text-status-success font-medium"><i class="ri-checkbox-circle-line"></i> 완료</span></td></tr>'
+    : '<tr class="hover:bg-surface-container-low transition-colors"><td class="px-4 py-2 text-xs text-on-surface-variant">' + Math.round(ev.min) + '분</td><td class="px-4 py-2"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">' + ev.gl + '</span></td><td class="px-4 py-2">셔플링 해소</td><td class="px-4 py-2 font-mono text-xs">' + ev.cell + '</td><td class="px-4 py-2 font-mono text-xs">-</td><td class="px-4 py-2"><span class="text-status-success font-medium"><i class="ri-checkbox-circle-line"></i> 해소</span></td></tr>';
+  const recent = evs.slice(-50).map(row).join('');
+  const all = evs.map(row).join('');
+  $('gl-timeline').innerHTML = recent || '<tr><td colspan="6" class="px-4 py-3 text-center text-xs text-on-surface-variant">출고 실행 후 표시됩니다</td></tr>';
+  $('gl-timeline-full').innerHTML = all || '<tr><td colspan="6" class="px-6 py-3 text-center text-xs text-on-surface-variant">이동 기록이 없습니다</td></tr>';
+  $('gl-timeline-count').textContent = evs.length;
 }
 
 let beforeRiskMap = {}, beforeShuffleMap = {}, beforeBlockCountMap = {}, beforeCountMap = {};
+let lastLoaded = 0, mtoRate = 0;
 
 function loadYardFile(file){
   const reader = new FileReader();
@@ -284,9 +285,16 @@ function loadYardFile(file){
         beforeRiskMap[c.id]=c.risk; beforeShuffleMap[c.id]=c.shuffleCount;
         beforeBlockCountMap[c.id]=c.blockers; beforeCountMap[c.id]=c.aliveCount;
       });
-      $('data-badge').textContent = '● 야드 ' + loaded.toLocaleString() + '대 로드';
-      $('data-badge').className = 'badge';
+      lastLoaded = loaded;
+      const allCars = cells.flatMap((c:any)=> c.bundles.flat());
+      const mtoCnt = allCars.filter((c:any)=> c.mto==='MTO').length;
+      mtoRate = Math.round(mtoCnt / Math.max(1, allCars.length) * 1000) / 10;
+      $('data-badge').textContent = '야드 ' + loaded.toLocaleString() + '대 로드';
+      $('data-badge').className = 'flex items-center gap-2 bg-green-50 text-status-success rounded-full text-xs font-medium border border-green-100 px-3 py-1.5';
       $('yard-info').innerHTML = '<b>' + file.name + '</b><br/>차량 ' + loaded.toLocaleString() + '대 로드 완료';
+      $('kpi-incoming').textContent = loaded.toLocaleString('ko-KR');
+      $('kpi-mto').textContent = mtoRate;
+      $('kpi-high').textContent = cells.filter(c=>c.risk==='HIGH').length;
       resetOutputs();
       drawHeatmaps();
       addLog('[야드] ' + file.name + ' 로드 · 차량 ' + loaded.toLocaleString() + '대 · 고위험 셀 ' + cells.filter(c=>c.risk==='HIGH').length + '개');
@@ -301,31 +309,88 @@ function loadYardFile(file){
 
 function resetOutputs(){
   resetSatelliteCache();   // 위성 뷰 캐시 리셋
-  $('ai-progress').style.width = '0%';
-  $('ai-progress-label').textContent = '대기 중';
-  $('ai-resolved').textContent = 0;
-  $('ai-pending').textContent = 0;
-  $('ai-direct').textContent = 0;
-  $('ai-moves').textContent = 0;
-  $('ai-diagnosis').textContent = '—';
-  $('ai-cause').textContent = '—';
-  $('ai-prediction').textContent = '—';
-  $('ai-recommendation').textContent = '—';
-  $('verdict-text').textContent = '출고 실행 후, 셔플링이 해소된 셀 비율로 배치 효율을 판단합니다.';
-  $('cell-result-log').innerHTML = '<b>셀별 해소 결과:</b> 출고 실행 후 표시됩니다.';
-  $('gl-board').innerHTML = '<b>🚚 G-Lifter 이동 현황:</b> 출고 실행 후 표시됩니다.';
-  $('gl-timeline').innerHTML = '<b>⏱️ G-Lifter 이동 타임라인:</b> 출고 실행 후 표시됩니다.';
+  historyStack = [];
+  all$('btn-undo').forEach((b: any)=> b.disabled = true);
+  setW('ai-progress', '0%');
+  setT('ai-progress-label', '0%');
+  setT('ai-resolved', 0);
+  setT('ai-pending', 0);
+  setT('ai-direct', 0);
+  setT('ai-moves', 0);
+  setT('ai-resolved-bar', 0);
+  setT('ai-resolved-bar2', 0);
+  setT('ai-shuffle-total', 0);
+  setT('ai-pending-bar', 0);
+  setW('prog-direct', '0%');
+  setT('kpi-direct-rate', '0%');
+  setT('kpi-direct-rate2', '0%');
+  setT('kpi-saved', 0);
+  setT('kpi-compare', '—');
+  setT('ai-diagnosis', '—');
+  setT('ai-cell-analysis', '—');
+  setT('ai-prediction', '—');
+  setT('ai-recommendation', '—');
+  setT('verdict-text', '');
+  setH('cell-result-log', '셀별 해소 결과: 출고 실행 후 표시됩니다.');
+  setH('gl-board', 'G-Lifter 이동 현황: 출고 실행 후 표시됩니다.');
+  setH('gl-timeline', '<tr><td colspan="6" class="px-4 py-3 text-center text-xs text-on-surface-variant">출고 실행 후 표시됩니다</td></tr>');
+  setH('gl-timeline-full', '');
+  setT('gl-timeline-count', 0);
 }
 
 let isRunning = false;
 let stepState: any = null;
+let historyStack: any[] = [];   // 출고 단계 되돌리기용 스냅샷 스택
+
+// 현재 상태 스냅샷 저장 (단계 진행 전 호출)
+function saveSnapshot(){
+  const cars = cells.flatMap((c: any)=> c.bundles.flat());
+  historyStack.push({
+    removed: cars.map((car: any)=> car.removed),
+    cells: cells.map(c=>({
+      dispatched:c.dispatched, shuffled:c.shuffled, direct:c.direct,
+      resolvedS:c.resolvedS, pendingS:c.pendingS,
+      hadDispatch:c.hadDispatch, resolved:c.resolved, pending:c.pending
+    })),
+    glifter: glifterState.map(g=>({id:g.id, rankIdx:g.rankIdx, cell:g.cell, path:[...g.path], moves:g.moves})),
+    eventsLen: events.length,
+    timelineLen: timeline.length,
+    st: stepState ? {...stepState, unmatchedList:[...stepState.unmatchedList]} : null
+  });
+  if(historyStack.length > 60) historyStack.shift();
+  all$('btn-undo').forEach((b: any)=> b.disabled = historyStack.length === 0);
+}
+
+// 이전 단계로 되돌리기 (출고 되돌리기)
+function undoStep(){
+  const snap = historyStack.pop();
+  all$('btn-undo').forEach((b: any)=> b.disabled = historyStack.length === 0);
+  if(!snap){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; }
+  const cars = cells.flatMap((c: any)=> c.bundles.flat());
+  cars.forEach((car: any, i: number)=>{ car.removed = snap.removed[i]; });
+  cells.forEach((c: any, i: number)=>{ Object.assign(c, snap.cells[i]); });
+  glifterState = snap.glifter.map((g: any)=>({...g, path:[...g.path]}));
+  events = events.slice(0, snap.eventsLen);
+  timeline = timeline.slice(0, snap.timelineLen);
+  stepState = snap.st;
+  cells.forEach((c: any)=>{ c.bundles.forEach((b: any)=> calcBundle(b)); c.updateStats(); });
+  simDone = false;
+  if(stepState && stepState.idx < stepState.plates.length) setRunning(true);
+  else setRunning(false);
+  updateAI();
+  drawHeatmaps();
+  renderTimeline();
+  renderGlifterBoard();
+  $('sim-progress').textContent = '↩️ 되돌림 · ' + (stepState ? stepState.idx : 0) + '/' + (stepState ? stepState.plates.length : 0) + '대 · 경과 ' + (stepState ? Math.round(stepState.t) : 0) + '분';
+  addLog('[출고 되돌리기] 이전 단계 상태로 복원했습니다.');
+}
 
 function setRunning(run){
   isRunning = run;
-  ['btn-export','btn-reset'].forEach(id=>{
-    $(id).disabled = run;
-  });
-  $('btn-run').textContent = run ? '⏭️ 다음 단계 진행' : '▶️ 출고 실행 (단계별 셔플링 해소 확인)';
+  all$('btn-export').forEach((b: any)=> b.disabled = run);
+  all$('btn-reset').forEach((b: any)=> b.disabled = run);
+  const label = run ? '⏭️ 분석 진행' : (simDone ? '✅ 분석 완료' : '분석 시작');
+  all$('btn-run').forEach((b: any)=> b.textContent = label);
 }
 
 function runDispatch(){
@@ -341,10 +406,25 @@ function runDispatch(){
   timeline = [];
   cells.forEach(c=>{ c.dispatched=0; c.shuffled=0; c.direct=0; c.resolvedS=0; c.pendingS=0; c.hadDispatch=false; c.resolved=false; c.pending=false; });
   initGlifters();
-  stepState = {plates, idx:0, seq:0, t:0, matched:0, unmatched:0, unmatchedList:[], shuffleBase: cells.reduce((s,c)=>s+c.shuffleCount,0)};
+
+  // 지시 전처리: 중복 플레이트만 배제 — 원래(업로드) 순서 유지
+  // → 셔플링 지시가 전체 진행에 분산되어 클릭 단위로 점진 해소
+  const orderedPlates: string[] = [];
+  const seenPlates = new Set<string>();
+  let dispatchShuffle = 0;
+  plates.forEach(p=>{
+    const key = normPlate(p);
+    if(seenPlates.has(key)) return;          // 중복 배제
+    seenPlates.add(key);
+    orderedPlates.push(p);
+    const f = plateIndex[key];
+    if(f && !f.car.removed && f.car.shuffle) dispatchShuffle++;
+  });
+
+  stepState = {plates: orderedPlates, idx:0, seq:0, t:0, matched:0, unmatched:0, unmatchedList:[], dispatchShuffle, dispatchedResolved: 0};
 
   setRunning(true);
-  drawHeatmap('heatmap-before','before');
+  drawHeatmaps();
   $('sim-progress').textContent = '출고 실행 중... 0/' + plates.length + '대 · 경과 0분';
   addLog('[출고 실행] 단계별 시뮬레이션 시작: ' + plates.length + '대 지시 · 버튼 클릭마다 1단계 진행');
   stepTick();
@@ -354,27 +434,36 @@ function runDispatch(){
 function collectAIState(){
   const st = stepState;
   const directCount = cells.reduce((s,c)=>s+c.direct,0);
-  const resolvedShuffleTotal = cells.reduce((s,c)=>s+c.resolvedS,0);
-  // 잔존/해소율 = 출고 시작 시점의 초기 셔플링 기준 (누적 카운트 아님)
-  const shuffleBase = st ? st.shuffleBase : cells.reduce((s,c)=>s+c.shuffleCount,0);
-  const pending = Math.max(0, shuffleBase - resolvedShuffleTotal);
-  const rate = shuffleBase > 0 ? Math.round(resolvedShuffleTotal / shuffleBase * 100) : 0;
+  const physicalResolved = cells.reduce((s,c)=>s+c.resolvedS,0);        // 물리적 전수 해소 건수 (KPI 표시용)
+  // 해소율 = 지시된 셔플링 중 해소 완료 / 지시된 셔플링 (분모 = 업로드 목록 중 행3 셔플링)
+  const dispatchShuffle = st ? st.dispatchShuffle : cells.reduce((s,c)=>s+c.shuffleCount,0);
+  const dispatchedResolved = st ? st.dispatchedResolved : 0;
+  const pending = Math.max(0, dispatchShuffle - dispatchedResolved);
+  const rate = dispatchShuffle > 0 ? Math.round(dispatchedResolved / dispatchShuffle * 100) : 0;
   const moves = timeline.filter(e=>e.type==='MOVE').length;
   return {
     dispatch: st ? st.plates.length : 0,
     matched: st ? st.matched : 0,
     progress: st ? st.idx : 0,
     t: st ? st.t : 0,
-    finished: !st || st.idx >= st.plates.length,
+    finished: !st || simDone || st.idx >= st.plates.length,   // 셔플링 전수 해소로 조기 종료 시에도 완료 처리
     direct: directCount,
-    shuffleTotal: shuffleBase,
-    resolved: resolvedShuffleTotal,
+    shuffleTotal: dispatchShuffle,
+    resolved: dispatchedResolved,
+    physicalResolved: physicalResolved,
     pending: pending,
     rate: rate,
     riskHigh: cells.filter(c=>c.risk==='HIGH').length,
     moves: moves,
     glifterState: glifterState,
-    topShuffle: cells.filter(c=>c.shuffleCount>0).sort((a,b)=>b.shuffleCount-a.shuffleCount).slice(0,3).map(c=>({id:c.id, count:c.shuffleCount}))
+    humanPending: cells.reduce((s,c)=>s+c.pendingS,0),   // 잔존(인간 처리 대상) 건수
+    humanMin: st ? directCount * TIME_DIRECT + dispatchShuffle * TIME_HUMAN_SHUFFLE : 0,
+    savedMin: st ? Math.max(0, (directCount * TIME_DIRECT + dispatchShuffle * TIME_HUMAN_SHUFFLE) - Math.round(st.t)) : 0,
+    topShuffle: cells.filter(c=>c.shuffleCount>0).sort((a,b)=>b.shuffleCount-a.shuffleCount).slice(0,3).map(c=>({
+      id: c.id,
+      count: c.shuffleCount,
+      deepCount: c.bundles.flat().filter((x: any)=> !x.removed && x.shuffle && x.row===3).length
+    }))
   };
 }
 
@@ -382,26 +471,41 @@ function collectAIState(){
 async function updateAI(){
   const state = collectAIState();
   const st = stepState;
-  const pct = st && st.plates.length > 0 ? Math.round(st.idx / st.plates.length * 100) : 0;
-  $('ai-progress').style.width = pct + '%';
-  $('ai-progress-label').textContent = st
-    ? st.idx + '/' + st.plates.length + '대 · 경과 ' + Math.round(st.t) + '분 · 해소율 ' + state.rate + '%'
-    : '대기 중';
-  $('ai-resolved').textContent = state.resolved;
-  $('ai-pending').textContent = state.pending;
-  $('ai-direct').textContent = state.direct;
-  $('ai-moves').textContent = state.moves;
+  // 해소 진척도 (진행 바 + 라벨)
+  setW('ai-progress', state.rate + '%');
+  setT('ai-progress-label', state.rate + '%');
+  setT('ai-resolved-bar', state.resolved);
+  setT('ai-resolved-bar2', state.resolved);
+  setT('ai-shuffle-total', state.shuffleTotal);
+  setT('ai-pending-bar', state.pending);
+  // Direct 출고율
+  const directRate = st && st.plates.length > 0 ? Math.round(state.direct / st.plates.length * 100) : 0;
+  setW('prog-direct', directRate + '%');
+  setT('kpi-direct-rate', directRate + '%');
+  setT('kpi-direct-rate2', directRate + '%');
+  // KPI 카드
+  setT('kpi-incoming', lastLoaded.toLocaleString('ko-KR'));
+  setT('kpi-mto', mtoRate);
+  setT('kpi-high', state.riskHigh);
+  setT('kpi-saved', state.savedMin);
+  setT('kpi-compare', st && st.t > 0 ? 'G-Lifter ' + Math.round(st.t) + '분 · 인간 ' + state.humanMin + '분' : '—');
+  // AI 브리핑 수치
+  setT('ai-resolved', state.resolved);   // 지시된 셔플링 중 해소 건수 (전수 해소 없음)
+  setT('ai-pending', state.pending);
+  setT('ai-direct', state.direct);
+  setT('ai-moves', state.moves);
 
   const analysis = await AIProvider.analyze(state);   // AI Provider 경유 (mock → 실제 API 전환 용이)
-  $('ai-diagnosis').textContent = analysis.diagnosis || '—';
-  $('ai-cause').textContent = analysis.cause || '—';
-  $('ai-prediction').textContent = analysis.prediction || '—';
-  $('ai-recommendation').textContent = analysis.recommendation || '—';
+  typeText($('ai-diagnosis'), analysis.diagnosis || '—');
+  typeText($('ai-cell-analysis'), analysis.cellAnalysis || '—');
+  typeText($('ai-prediction'), analysis.prediction || '—');
+  typeText($('ai-recommendation'), analysis.recommendation || '—');
 }
 
 // 수동 단계 진행: 버튼 클릭 1회 = 배치 1개 처리 후 <출고 후> 갱신
 function stepTick(){
   const st = stepState;
+  saveSnapshot();                     // 되돌리기용 스냅샷 (배치 처리 전)
   const batch = parseInt($('sim-speed').value) || 25;
   const end = Math.min(st.idx + batch, st.plates.length);
 
@@ -410,75 +514,78 @@ function stepTick(){
     const found = plateIndex[normPlate(plate)];
     if(!found){ st.unmatched++; st.unmatchedList.push(plate); continue; }
     const {cell, bundle, car} = found;
-    if(car.removed){ st.unmatched++; st.unmatchedList.push(plate + '(이미 출고)'); continue; }
+    if(car.removed){
+      if(car.shuffle){ st.dispatchedResolved++; cell.resolved = true; }   // G-Lifter가 이미 전수 해소 → 해소로 카운트
+      else { st.unmatched++; st.unmatchedList.push(plate + '(이미 출고)'); }
+      continue;
+    }
     st.matched++; cell.dispatched++; cell.hadDispatch = true;
 
     if(!car.shuffle){                                 // R2: 셔플링 차량 아님 → Direct Pick-up (즉시 출고)
       cell.direct++;
-      st.seq++; st.t += 1;
-      events.push({seq:st.seq, time:timeStr(st.t), cell:cell.id, bundle:car.bundle, vehicle:car.plateNo, action:'DISPATCH', handler:'-', result:'DIRECT_PICKUP', minutes:TIME_HUMAN, note:'셔플링 없이 즉시 출고', shuffleYn:'N'});
+      st.seq++; st.t += TIME_DIRECT;
+      events.push({seq:st.seq, time:timeStr(st.t), cell:cell.id, bundle:car.bundle, vehicle:car.plateNo, action:'DISPATCH', handler:'-', result:'DIRECT_PICKUP', minutes:TIME_DIRECT, note:'셔플링 없이 즉시 출고', shuffleYn:'N'});
       car.removed = true;
       calcBundle(bundle);
-    } else {                                          // R1: 셔플링 차량 (행3 30%, 사람 출고 불가 → G-Lifter 필요)
+    } else {                                          // R1: 셔플링 차량 — G-Lifter가 해당 셀로 이동해 지시 차량 1대 해소 (자유 이동)
       const rank = severityRank[cell.id];
       const g = glifterState[rank % glifterState.length];
-      const canResolve = g.rankIdx <= rank;           // 위험도 순위 전진 방향으로만 이동 (배치는 위험도 최상위부터)
-      const minutes = canResolve ? TIME_GL : TIME_HUMAN;
       cell.shuffled++;
-      if(canResolve){
-        if(g.cell !== cell.id){                       // 지시 셀로 이동
-          st.seq++; st.t += TIME_MOVE;
-          timeline.push({type:'MOVE', min:st.t, gl:g.id, from:g.cell, to:cell.id});
-          events.push({seq:st.seq, time:timeStr(st.t), cell:cell.id, bundle:car.bundle, vehicle:'-', action:'MOVE', handler:g.id, result:'MOVED', minutes:TIME_MOVE, note:'셔플링 해소를 위해 셀 이동', shuffleYn:'-'});
-          g.cell = cell.id; g.rankIdx = rank;
-          g.path.push(cell.id); g.moves++;
-        }
-        st.seq++; st.t += minutes;
-        timeline.push({type:'SHUFFLE', min:st.t, gl:g.id, cell:cell.id, result:'RESOLVED'});
-        events.push({seq:st.seq, time:timeStr(st.t), cell:cell.id, bundle:car.bundle, vehicle:car.plateNo, action:'SHUFFLE', handler:g.id, result:'RESOLVED', minutes, note:'G-Lifter가 인양 → 셔플링 해소', shuffleYn:'Y'});
-        cell.resolvedS++;
-        car.removed = true;                           // R3: G-Lifter가 인양 출고
-        cell.resolved = true;
-        calcBundle(bundle);
-      } else {                                        // 위험도 순위 역방향(이미 지나간 더 위험한 셀) → 잔존
-        st.seq++; st.t += minutes;
-        events.push({seq:st.seq, time:timeStr(st.t), cell:cell.id, bundle:car.bundle, vehicle:car.plateNo, action:'SHUFFLE', handler:g.id, result:'PENDING', minutes, note:'G-Lifter가 더 위험한 셀을 먼저 처리 중 → 잔존', shuffleYn:'Y'});
-        cell.pendingS++;
-        cell.pending = true;                          // R4: 출고 불가, 차량 잔존
+      if(g.cell !== cell.id){                         // 해당 셀로 이동 (이동 시간은 인양 5분에 포함)
+        st.seq++; st.t += 0;
+        timeline.push({type:'MOVE', min:st.t, gl:g.id, from:g.cell, to:cell.id});
+        events.push({seq:st.seq, time:timeStr(st.t), cell:cell.id, bundle:car.bundle, vehicle:'-', action:'MOVE', handler:g.id, result:'MOVED', minutes:0, note:'셔플링 해소를 위해 셀 이동(시간은 인양 5분에 포함)', shuffleYn:'-'});
+        g.cell = cell.id; g.rankIdx = rank;
+        g.path.push(cell.id); g.moves++;
       }
+      // 지시된 이 차량 1대만 해소 (미지시 셔플링은 야드에 남음)
+      st.seq++; st.t += TIME_GL_SHUFFLE;
+      timeline.push({type:'SHUFFLE', min:st.t, gl:g.id, cell:cell.id, result:'RESOLVED'});
+      events.push({seq:st.seq, time:timeStr(st.t), cell:cell.id, bundle:car.bundle, vehicle:car.plateNo, action:'SHUFFLE', handler:g.id, result:'RESOLVED', minutes:TIME_GL_SHUFFLE, note:'G-Lifter가 인양(5분) → 셔플링 해소', shuffleYn:'Y'});
+      cell.resolvedS++;
+      car.removed = true;
+      cell.resolved = true;
+      st.dispatchedResolved++;
+      calcBundle(bundle);
     }
   }
 
   cells.forEach(c=> c.updateStats());
   updateAI();                                         // 단계 진행 시 AI 설명도 함께 갱신
-  drawHeatmap('heatmap-after','after');               // 클릭 단계마다 <출고 후> 갱신
-  if(selectedCellId && cells.some(c=>c.id===selectedCellId)) renderBundleViewer(selectedCellId, 'after');
+  drawHeatmaps();
   renderTimeline();
   renderGlifterBoard();
-  if(st.idx < st.plates.length){
+  if(st.dispatchedResolved >= st.dispatchShuffle && st.dispatchShuffle > 0){
+    finishDispatch();                                 // 지시 셔플링 전부 해소 → 작업 종료
+  } else if(st.idx < st.plates.length){
     $('sim-progress').textContent = '진행 ' + st.idx + '/' + st.plates.length + '대 · 경과 ' + Math.round(st.t) + '분 · ⏭️ 버튼을 눌러 다음 단계';
   } else {
     finishDispatch();
   }
 }
 
+// 셀 완전 청소는 제거됨 — G-Lifter는 지시된 셔플링 차량만 1대씩 해소 (전수 해소 금지)
+
 function finishDispatch(){
   const st = stepState;
+  simDone = true;                                     // 완료 플래그를 먼저 설정 (조기 종료 포함)
   const state = collectAIState();                     // 동기 상태 수집 (updateAI는 async)
   updateAI();                                         // AI 텍스트 갱신 (비동기, 완료 대기 없음)
   const rate = state.rate, shuffleTotal = state.shuffleTotal, resolvedShuffleTotal = state.resolved, directCount = state.direct;
   const dispatchedCells = cells.filter(c=>c.hadDispatch);
+  // 시간 비교: G-Lifter(5분/건) vs 인간(10분/건)
+  const humanTotal = directCount * TIME_DIRECT + shuffleTotal * TIME_HUMAN_SHUFFLE;
+  const savedMin = Math.max(0, humanTotal - Math.round(st.t));
 
-  simDone = true;
   const verdict = $('verdict-text');
   if(shuffleTotal === 0){
-    verdict.textContent = '야드에 셔플링 차량이 없어 해소율을 판단할 수 없습니다.';
+    verdict.textContent = '업로드 목록에 셔플링 차량이 없어 해소율을 판단할 수 없습니다.';
   } else if(rate === 100){
-    verdict.innerHTML = '초기 셔플링 <b>' + shuffleTotal + '건 전부</b> <span class="resolved">✅ 해소</span>되었습니다.<br/>→ G-Lifter 배치가 <b>출고 셔플링을 완전히 해소</b>하고 있습니다.';
+    verdict.innerHTML = '지시 셔플링 <b>' + shuffleTotal + '건 전부</b> <span class="resolved">✅ 해소</span>되었습니다.<br/>→ G-Lifter 배치가 <b>출고 셔플링을 완전히 해소</b>했습니다.';
   } else if(rate >= 50){
-    verdict.innerHTML = '초기 셔플링 <b>' + shuffleTotal + '건</b> 중 <b>' + resolvedShuffleTotal + '건 해소</b> (해소율 ' + rate + '%).<br/>→ 잔존 <b>' + state.pending + '건</b> · G-Lifter 대수 확대 시 효율 증가.';
+    verdict.innerHTML = '지시 셔플링 <b>' + shuffleTotal + '건</b> 중 <b>' + resolvedShuffleTotal + '건 해소</b> (해소율 ' + rate + '%).<br/>→ 잔존 <b>' + state.pending + '건</b> · G-Lifter 대수 확대 시 효율 증가.';
   } else {
-    verdict.innerHTML = '초기 셔플링 <b>' + shuffleTotal + '건</b> 중 해소 <b>' + resolvedShuffleTotal + '건</b> (' + rate + '%).<br/>→ 잔존 <b>' + state.pending + '건</b> · G-Lifter 배치 확대가 필요한 상태.';
+    verdict.innerHTML = '지시 셔플링 <b>' + shuffleTotal + '건</b> 중 해소 <b>' + resolvedShuffleTotal + '건</b> (' + rate + '%).<br/>→ 잔존 <b>' + state.pending + '건</b> · G-Lifter 배치 확대가 필요한 상태.';
   }
 
   const cellLog = $('cell-result-log');
@@ -495,10 +602,12 @@ function finishDispatch(){
   drawHeatmaps();
   renderTimeline();
   renderGlifterBoard();
-  $('sim-progress').textContent = '✅ 완료 · ' + st.plates.length + '대 · 경과 ' + Math.round(st.t) + '분 · 해소율 ' + rate + '%';
-  addLog('[출고 실행] 지시 ' + st.plates.length + '대 · 매칭 ' + st.matched + ' · 실패 ' + st.unmatched + ' · Direct Pick-up ' + directCount + '대');
+  const endByShuffle = st.dispatchShuffle > 0 && st.dispatchedResolved >= st.dispatchShuffle && st.idx < st.plates.length;
+  $('sim-progress').textContent = '✅ 완료' + (endByShuffle ? '(셔플링 전수 해소)' : '') + ' · 지시 ' + st.plates.length + '대 · 경과 ' + Math.round(st.t) + '분 · 해소율 ' + rate + '%';
+  addLog('[출고 실행] 지시 ' + st.plates.length + '대 · 매칭 ' + st.matched + ' · 실패 ' + st.unmatched + ' · Direct Pick-up ' + directCount + '대' + (endByShuffle ? ' · 셔플링 완료로 조기 종료' : ''));
+  addLog('[시간 비교] G-Lifter 소요 ' + Math.round(st.t) + '분 · 인간(셔플링 ' + shuffleTotal + '건) 동일 처리 시 ' + humanTotal + '분 → ' + savedMin + '분 절약');
   addLog('[G-Lifter 이동] 이동 ' + timeline.filter(e=>e.type==='MOVE').length + '회 · 최종 위치: ' + glifterState.map(g=>g.id+'@'+g.cell).join(', '));
-  addLog('[셔플링 결과] 초기 발생 ' + shuffleTotal + '건 · 해소 ' + resolvedShuffleTotal + '건 · 잔존 ' + state.pending + '건 · 해소율 ' + rate + '%');
+  addLog('[셔플링 결과] 지시 셔플링 ' + shuffleTotal + '건 · 해소 ' + resolvedShuffleTotal + '건 · 잔존 ' + state.pending + '건 · 해소율 ' + rate + '%');
   if(st.unmatchedList.length) addLog('[미매칭 번호판] ' + st.unmatchedList.slice(0,20).join(', ') + (st.unmatchedList.length>20 ? ' 외 ' + (st.unmatchedList.length-20) + '개' : ''));
   setRunning(false);
 }
@@ -722,13 +831,81 @@ function drawHeatmap(svgId, mode){
   }
 }
 
+// code.html 스타일 div 그리드 히트맵 렌더러
+function cellColor(risk: string): string{
+  return risk === 'HIGH' ? 'bg-status-alert' : (risk === 'MID' ? 'bg-yellow-400' : 'bg-surface-container-high');
+}
+
+// 야드 배치 현황 (A~V × D1~D5, 셀 클릭 → 셀 상세 분석)
+function renderYardGrid(){
+  const g = $('yard-grid');
+  if(!g) return;
+  let html = '<div class="flex gap-1.5 pl-8">' + ZONES.map(z=> '<div class="flex-1 text-[10px] text-center text-outline font-bold">' + z + '</div>').join('') + '</div>';
+  DEPTHS.forEach(d=>{
+    html += '<div class="flex gap-1.5 items-center"><span class="w-6 text-[10px] font-bold text-outline text-right pr-2">D' + d + '</span>';
+    ZONES.forEach(z=>{
+      const cell = cells.find(c=> c.id === z + d);
+      const color = cell ? cellColor(cell.risk) : 'bg-surface-container-high';
+      const ring = cell && cell.risk === 'HIGH' ? ' shadow-sm ring-1 ring-status-alert' : '';
+      const dot = cell && cell.hasG
+        ? '<div class="absolute inset-0 flex items-center justify-center"><div class="w-3 h-3 rounded-full border-2 border-primary-container bg-white shadow-sm flex items-center justify-center"><div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div></div></div>'
+        : '';
+      html += '<div class="flex-1 h-8 ' + color + ring + ' rounded cursor-pointer hover:opacity-80 transition-opacity relative" onclick="showCellDetails(\'' + z + d + '\')">' + dot + '</div>';
+    });
+    html += '</div>';
+  });
+  g.innerHTML = html;
+}
+
+// BEFORE/AFTER 위험도 변화 (소형 그리드)
+function renderRiskGrid(id: string, mode: string){
+  const g = $(id);
+  if(!g) return;
+  let html = '<div class="flex gap-1 pl-6">' + ZONES.map(z=> '<div class="flex-1 text-[8px] text-center text-outline font-bold">' + z + '</div>').join('') + '</div>';
+  DEPTHS.forEach(d=>{
+    html += '<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D' + d + '</span>';
+    ZONES.forEach(z=>{
+      const cell = cells.find(c=> c.id === z + d);
+      if(!cell){ html += '<div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div>'; return; }
+      const risk = mode === 'before' ? (beforeRiskMap[cell.id] || cell.risk) : cell.risk;
+      let color = cellColor(risk);
+      if(mode === 'after' && cell.resolved) color = 'bg-status-success';
+      html += '<div class="flex-1 h-6 ' + color + ' rounded-sm"></div>';
+    });
+    html += '</div>';
+  });
+  g.innerHTML = html;
+}
+
+// 셀 상세 분석 (AI 브리핑 전환)
+(window as any).__showCellDetails = (cellId: string)=>{
+  $('ai-briefing-default').classList.add('hidden');
+  $('ai-briefing-detail').classList.remove('hidden');
+  $('detail-cell-id').innerText = cellId;
+  const cell = cells.find(c=> c.id === cellId);
+  if(!cell) return;
+  const alive = cell.cars.filter((c: any)=> !c.removed);
+  const mto = alive.filter((c: any)=> c.mto === 'MTO').length;
+  const mts = alive.filter((c: any)=> c.mto === 'MTS').length;
+  const shuffles = alive.filter((c: any)=> c.shuffle).length;
+  $('detail-depth').textContent = 'D' + cell.depth + (cell.depth >= 3 ? ' (심부)' : '');
+  $('detail-msg').innerHTML = '해당 셀은 MTO/MTS 혼재로 셔플링 차량 ' + shuffles + '대가 출고 경로를 막고 있습니다. G-Lifter 선제 투입이 시급합니다.';
+  $('detail-mto').textContent = mto + '대';
+  $('detail-mts').textContent = mts + '대';
+  $('detail-shuffle').textContent = shuffles + '대';
+  $('detail-glifter').textContent = cell.hasG ? '배치됨' : '미배치';
+  $('detail-plan').textContent = 'G-Lifter를 해당 셀 상단에 배치하여 셔플링 대상 차량을 수직 인양하여 출고 경로를 즉시 확보해야 합니다.';
+};
+(window as any).__hideCellDetails = ()=>{
+  $('ai-briefing-default').classList.remove('hidden');
+  $('ai-briefing-detail').classList.add('hidden');
+};
+
 function drawHeatmaps(){
-  ensureBundleViewer();
-  drawHeatmap('heatmap-before','before');
-  drawHeatmap('heatmap-after','after');
-  if(selectedCellId && cells.some(c=>c.id===selectedCellId)) renderBundleViewer(selectedCellId, simDone ? 'after' : 'before');
-  drawSatellite('satellite-before','before');   // 위성 매핑 (대표 셀 3개)
-  drawSatellite('satellite-after','after');
+  renderYardGrid();
+  renderRiskGrid('grid-before','before');
+  renderRiskGrid('grid-after','after');
+  drawSatellite('satellite-view','after');   // 위성 매핑 단일 라이브 뷰 (단계 진행에 따라 갱신)
 }
 
 function exportCSV(){
@@ -741,29 +918,24 @@ function exportCSV(){
     const result = c.hadDispatch ? (c.resolved ? 'RESOLVED' : (c.pending ? 'PENDING' : 'DISPATCH_ONLY')) : '-';
     cellRows.push([c.id, beforeRiskMap[c.id]||c.risk, c.risk, beforeShuffleMap[c.id]||0, c.shuffleCount, beforeCountMap[c.id]||0, c.aliveCount, c.dispatched, c.direct, c.shuffled, result, c.hasG?'Y':'N']);
   });
-  const dl = (name: string, rows: any[][])=>{
-    const csv = rows.map(r=>r.map(v=>{ if(v===null||v===undefined) return ''; const s=String(v); return /[\",\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s; }).join(',')).join('\n');
-    const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    try{
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.style.display = 'none';
-      document.body.appendChild(a);            // 일부 브라우저는 DOM 부착 필요
-      a.click();
-      setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-    }catch(err){
-      // 다운로드 차단 환경(iframe/웹뷰 등) 폴백: 새 탭으로 CSV 열기
-      console.error('[CSV 다운로드 실패]', err);
-      window.open(url, '_blank');
-      addLog('[내보내기] 다운로드가 차단되어 새 탭으로 열었습니다: ' + name);
-    }
-  };
-  const ts = new Date().toISOString().replace(/[-:T]/g,'').slice(0,12);
-  dl('G-Lifter_이벤트로그_' + ts + '.csv', evRows);
-  dl('G-Lifter_셀해소결과_' + ts + '.csv', cellRows);
-  addLog('[내보내기] 이벤트 ' + events.length + '건 + 셀 해소 결과 ' + cells.length + '행');
+  const toCsv = (rows: any[][])=> rows.map(r=>r.map(v=>{ if(v===null||v===undefined) return ''; const s=String(v); return /[\",\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s; }).join(',')).join('\n');
+  const csv = '[셀 해소 결과]\n' + toCsv(cellRows) + '\n\n[이벤트 로그]\n' + toCsv(evRows);
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const fname = 'G-Lifter_분석결과_' + new Date().toISOString().replace(/[-:T]/g,'').slice(0,12) + '.csv';
+  // 1) 자동 다운로드 시도 (일부 환경에서는 차단될 수 있음)
+  try{
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ document.body.removeChild(a); }, 300);
+  }catch(err){ console.error('[CSV 자동 다운로드 실패]', err); }
+  // 2) 다운로드 모달 제공 — 직접 링크 클릭 + 미리보기 복사 (차단 환경 대응)
+  if($('export-link')){ $('export-link').href = url; $('export-link').setAttribute('download', fname); }
+  if($('export-preview')){ ($('export-preview') as HTMLTextAreaElement).value = csv; }
+  if($('export-modal')){ $('export-modal').classList.remove('hidden'); }
+  addLog('[내보내기] 분석 결과 CSV 생성: ' + fname + ' (' + (cellRows.length-1) + '셀 · 이벤트 ' + events.length + '건)');
 }
 
 $('upload-yard-box').addEventListener('click', ()=> $('file-yard').click());
@@ -790,8 +962,50 @@ $('file-dispatch').addEventListener('change', e=>{
   };
   reader.readAsText(file);
 });
+// 중복 id(헤더/모달)를 모두 잡는 헬퍼
+function all$(id: string): any[] { return Array.from(document.querySelectorAll('[id="' + id + '"]')); }
+// null-safe DOM 쓰기 헬퍼 (요소 누락 시 크래시 방지)
+function setT(id: string, v: any){ const el = $(id); if(el) el.textContent = v; }
+function setW(id: string, v: string){ const el = $(id); if(el) el.style.width = v; }
+function setH(id: string, v: any){ const el = $(id); if(el) el.innerHTML = v; }
+
+// AI 타이핑 효과 (타이머를 요소에 저장 — 갱신 시 이전 타이머 중단)
+function typeText(el: any, text: string){
+  if(!el) return;
+  if(el.__typeTimer) clearInterval(el.__typeTimer);
+  el.textContent = '';
+  let i = 0;
+  el.__typeTimer = setInterval(()=>{
+    i += 2;   // 2자씩 (빠른 타이핑)
+    el.textContent = text.slice(0, i);
+    if(i >= text.length){
+      el.textContent = text;
+      clearInterval(el.__typeTimer);
+      el.__typeTimer = null;
+    }
+  }, 14);
+}
+
 $('btn-run').addEventListener('click', ()=>{ if(isRunning) stepTick(); else runDispatch(); });
-$('btn-export').addEventListener('click', exportCSV);
+$('btn-undo').addEventListener('click', ()=>{ if(!historyStack.length){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; } undoStep(); });
+// 모달 내 중복 버튼에도 동일 핸들러 바인딩
+all$('btn-run').forEach(b=> b.addEventListener('click', ()=>{ if(isRunning) stepTick(); else runDispatch(); }));
+all$('btn-undo').forEach(b=> b.addEventListener('click', ()=>{ if(!historyStack.length){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; } undoStep(); }));
+// 중복 id(상세뷰/운영성과)의 내보내기 버튼 전부에 동일 핸들러 바인딩
+all$('btn-export').forEach(b=> b.addEventListener('click', exportCSV));
+// CSV 미리보기 복사
+$('btn-copy-csv').addEventListener('click', ()=>{
+  const prev = $('export-preview') as HTMLTextAreaElement | null;
+  if(!prev || !prev.value) return;
+  try{
+    prev.select();
+    prev.setSelectionRange(0, 999999);
+    document.execCommand('copy');
+    addLog('[복사] CSV 전체를 클립보드에 복사했습니다.');
+  }catch(e){
+    navigator.clipboard.writeText(prev.value).then(()=> addLog('[복사] CSV 전체를 클립보드에 복사했습니다.')).catch(()=>{});
+  }
+});
 $('glifter-count').addEventListener('change', ()=>{
   if(isRunning){ addLog('[오류] 출고 실행 중에는 G-Lifter 대수를 변경할 수 없습니다.'); return; }
   if(!yardLoaded){ addLog('[오류] G-Lifter 대수를 변경하려면 야드를 먼저 로드하세요.'); return; }
@@ -802,16 +1016,26 @@ $('glifter-count').addEventListener('change', ()=>{
 $('btn-reset').addEventListener('click', ()=>{
   if(isRunning){ addLog('[오류] 출고 실행 중에는 초기화할 수 없습니다.'); return; }
   cells = []; plateIndex = {}; events = []; timeline = []; simDone = false; yardLoaded = false;
-  $('data-badge').textContent = '● 야드 미로드';
-  $('data-badge').className = 'badge warn';
+  $('data-badge').textContent = '시스템 대기';
+  $('data-badge').className = 'flex items-center gap-2 bg-green-50 text-status-success rounded-full text-xs font-medium border border-green-100';
   $('yard-info').textContent = '야드 엑셀을 업로드하세요.';
   $('plate-input').value = '';
   resetOutputs();
-  $('heatmap-before').innerHTML = '';
-  $('heatmap-after').innerHTML = '';
-  hideBundleViewer();
+  $('yard-grid').innerHTML = '';
+  $('grid-before').innerHTML = '';
+  $('grid-after').innerHTML = '';
+  $('satellite-view').innerHTML = '';
   logEl.innerHTML = '';
   addLog('[초기화] 야드 엑셀을 업로드하세요.');
 });
+
+// 헤더 시계
+setInterval(()=>{
+  const el = $('clock');
+  if(el){
+    const d = new Date();
+    el.textContent = d.getHours() + '시 ' + d.getMinutes() + '분 ' + d.getSeconds() + '초';
+  }
+}, 1000);
 
 addLog('사용법: 1) 야드 마스터 엑셀 업로드 → 2) 빼고 싶은 차량 번호판 CSV 업로드(대량 가능) → 3) 출고 실행 → 셀별 해소 결과 확인');

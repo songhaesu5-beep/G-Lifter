@@ -43,8 +43,8 @@ const BUNDLE_GEOM = [
   { x: AISLE_1, w: AISLE_2 - AISLE_1 },
   { x: AISLE_2, w: 1 - AISLE_2 }
 ];
-const SLOT_ROWS = 11;
-const SLOT_COLS = 10;
+const SLOT_ROWS = 22;    // 세로 22행 (22×5 배열 90도 회전)
+const SLOT_COLS = 5;     // 가로 5열
 
 // 대표 셀/슬롯 캐시 — 출고 전(before)에 확정, after에서 동일 참조 유지
 let cacheGen = 0;
@@ -57,7 +57,7 @@ function ensureCache(cells: any[]){
   const riskRank: any = { HIGH: 0, MID: 1, OK: 2 };
   const ranked = [...cells].filter(c => c.shuffleCount > 0)
     .sort((a, b) => (riskRank[a.risk] - riskRank[b.risk]) || (b.shuffleCount - a.shuffleCount));
-  const picks = ranked.slice(0, 3);
+  const picks = ranked.slice(0, 3);              // 대표 셀 3개 (번들당 1개)
   if(picks.length < 3){  // 셔플 셀이 3개 미만이면 잔여는 재고 많은 셀로 채움
     [...cells].filter(c => !picks.includes(c))
       .sort((a, b) => b.aliveCount - a.aliveCount)
@@ -68,8 +68,7 @@ function ensureCache(cells: any[]){
   watchCache.items = picks.map(cell => ({
     cell,
     slots: [...cell.bundles[0]]
-      .filter((c: any) => !c.removed)
-      .sort((a: any, b: any) => ((b.shuffle ? 1 : 0) - (a.shuffle ? 1 : 0)) || (a.pos - b.pos))
+      .sort((a: any, b: any) => a.pos - b.pos)   // 위치 순서 유지 (셔플링 정렬 제거 → 실제 좌표 표시)
       .slice(0, SLOT_ROWS * SLOT_COLS)
   }));
 }
@@ -129,23 +128,24 @@ export function drawSatellite(svgId: string, mode: 'before' | 'after'){
     bg.setAttribute('rx','8');
     svg.appendChild(bg);
 
-    // 슬롯 그리드 (11행 × 10열)
-    const slotW = (gw - padX * 2) / SLOT_COLS;
-    const slotH = (IMG_H - padY * 2) / SLOT_ROWS;
+    // 슬롯 그리드 (5열 × 22행) — 22×5(데이터 순서)를 90도 시계방향 회전한 매핑
+    const slotW = (gw - padX * 2) / SLOT_COLS;    // 가로 5칸
+    const slotH = (IMG_H - padY * 2) / SLOT_ROWS;  // 세로 22칸
     it.slots.forEach((car, i) => {
-      const r = Math.floor(i / SLOT_COLS), c = i % SLOT_COLS;
+      const r = i % SLOT_ROWS;                                             // 0..21 세로
+      const c = SLOT_COLS - 1 - Math.floor(i / SLOT_ROWS);                 // 4..0 가로
       const rect = el('rect');
       rect.setAttribute('x', String(gx + padX + c * slotW + 1));
       rect.setAttribute('y', String(padY + r * slotH + 1));
       rect.setAttribute('width', String(slotW - 2));
       rect.setAttribute('height', String(slotH - 2));
       rect.setAttribute('rx','3');
-      if(car.removed){                       // 출고/해소 완료 → 공석
-        rect.setAttribute('fill','rgba(20,25,35,0.6)');
-        rect.setAttribute('stroke','rgba(148,163,184,0.3)');
+      if(car.removed){                       // 출고 완료 → 셔플링 해소 → 검정
+        rect.setAttribute('fill','rgba(8,10,14,0.9)');
+        rect.setAttribute('stroke','rgba(148,163,184,0.25)');
         rect.setAttribute('stroke-width','1');
-      } else if(car.shuffle){                // 셔플링 차량 (해소 대상)
-        rect.setAttribute('fill','rgba(239,68,68,0.78)');
+      } else if(car.shuffle && car.row === 3){   // 행3 셔플링(blocking) → G-Lifter 효과 영역 → 빨강
+        rect.setAttribute('fill','rgba(239,68,68,0.85)');
         rect.setAttribute('stroke','rgba(255,255,255,0.75)');
         rect.setAttribute('stroke-width','1.4');
         rect.setAttribute('class','sat-pulse');
@@ -168,7 +168,7 @@ export function drawSatellite(svgId: string, mode: 'before' | 'after'){
     label.setAttribute('stroke','rgba(0,0,0,0.55)');
     label.setAttribute('stroke-width','0.6');
     const removedCnt = it.slots.filter(s => s.removed).length;
-    label.textContent = cell.id + ' · 셔플 ' + cell.shuffleCount + '대' + (removedCnt ? ' · 출고 ' + removedCnt + '대' : '');
+    label.textContent = cell.id + (removedCnt ? ' · 출고 ' + removedCnt + '대' : '');
     svg.appendChild(label);
   });
 
@@ -211,14 +211,5 @@ export function drawSatellite(svgId: string, mode: 'before' | 'after'){
         svg.appendChild(t);
       }
     });
-
-    // 범례
-    const lg = el('text');
-    lg.setAttribute('x','24'); lg.setAttribute('y', String(IMG_H - 14));
-    lg.setAttribute('font-size','15'); lg.setAttribute('font-weight','600');
-    lg.setAttribute('fill','#f1f5f9');
-    lg.setAttribute('stroke','rgba(0,0,0,0.6)'); lg.setAttribute('stroke-width','0.5');
-    lg.textContent = '■ 셔플링 차량 · □ 일반 차량 · ▨ 출고 완료 공석 · ● G-Lifter';
-    svg.appendChild(lg);
   }
 }

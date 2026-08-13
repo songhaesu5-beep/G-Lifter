@@ -1,0 +1,534 @@
+<!DOCTYPE html><html lang="ko" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>G-Lifter 배치 의사결정 시스템 - 출고 시뮬레이션</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "border-subtle": "#E2E8F0",
+                "on-primary": "#ffffff",
+                "surface-container-low": "#f2f3ff",
+                "on-primary-fixed": "#001b3f",
+                "inverse-on-surface": "#eff0ff",
+                "on-primary-fixed-variant": "#25467a",
+                "on-primary-container": "#7695ce",
+                "primary-container": "#002c5f",
+                "on-surface-variant": "#43474f",
+                "on-secondary": "#ffffff",
+                "secondary-fixed-dim": "#82cfff",
+                "error": "#ba1a1a",
+                "on-background": "#0d1a3b",
+                "inverse-primary": "#abc7ff",
+                "primary-fixed-dim": "#abc7ff",
+                "status-success": "#10B981",
+                "secondary-fixed": "#c6e7ff",
+                "background": "#faf8ff",
+                "on-secondary-fixed-variant": "#004c6b",
+                "surface-container-high": "#e3e7ff",
+                "on-secondary-container": "#004866",
+                "on-tertiary-container": "#d0815a",
+                "on-surface": "#0d1a3b",
+                "tertiary-fixed-dim": "#ffb693",
+                "surface-tint": "#3f5e94",
+                "inverse-surface": "#242f51",
+                "secondary-container": "#2dbcfe",
+                "on-error": "#ffffff",
+                "surface-container": "#ebedff",
+                "tertiary": "#300e00",
+                "surface-bright": "#faf8ff",
+                "on-tertiary": "#ffffff",
+                "error-container": "#ffdad6",
+                "on-error-container": "#93000a",
+                "tertiary-fixed": "#ffdbcc",
+                "status-alert": "#EF4444",
+                "surface-dim": "#d0d9ff",
+                "surface-gray": "#F8FAFC",
+                "outline-variant": "#c4c6d1",
+                "primary": "#001839",
+                "surface-variant": "#dbe1ff",
+                "on-tertiary-fixed-variant": "#723615",
+                "tertiary-container": "#511d00",
+                "on-secondary-fixed": "#001e2d",
+                "primary-fixed": "#d7e3ff",
+                "surface": "#faf8ff",
+                "surface-container-lowest": "#ffffff",
+                "outline": "#747780",
+                "surface-container-highest": "#dbe1ff",
+                "secondary": "#00658d",
+                "on-tertiary-fixed": "#351000"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "margin-mobile": "16px",
+                "container-max": "1440px",
+                "unit": "4px",
+                "gutter": "24px",
+                "margin-desktop": "48px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "Inter"
+                ],
+                "headline-lg": [
+                        "Inter"
+                ],
+                "headline-xl-mobile": [
+                        "Inter"
+                ],
+                "code-sm": [
+                        "Inter"
+                ],
+                "label-md": [
+                        "Inter"
+                ],
+                "body-sm": [
+                        "Inter"
+                ],
+                "body-md": [
+                        "Inter"
+                ],
+                "body-lg": [
+                        "Inter"
+                ],
+                "headline-xl": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-xl-mobile": [
+                        "30px",
+                        {
+                                "lineHeight": "36px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "code-sm": [
+                        "13px",
+                        {
+                                "lineHeight": "18px",
+                                "fontWeight": "500"
+                        }
+                ],
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-sm": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-xl": [
+                        "40px",
+                        {
+                                "lineHeight": "48px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "700"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style data-purpose="base-styles">
+    body {
+      background-color: theme('colors.surface-container-low');
+      color: theme('colors.on-surface');
+      font-family: 'Inter', sans-serif;
+    }
+    /* Custom scrollbar for log sections */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: theme('colors.surface-container');
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: theme('colors.outline-variant');
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: theme('colors.outline');
+    }
+  </style>
+<script>
+    function showCellDetails(cellId) {
+      document.getElementById('ai-briefing-default').classList.add('hidden');
+      document.getElementById('ai-briefing-detail').classList.remove('hidden');
+      document.getElementById('detail-cell-id').innerText = cellId;
+    }
+    function hideCellDetails() {
+      document.getElementById('ai-briefing-detail').classList.add('hidden');
+      document.getElementById('ai-briefing-default').classList.remove('hidden');
+    }
+  </script>
+</head>
+<body class="min-h-screen flex flex-col text-sm">
+<!-- BEGIN: Header -->
+<header class="bg-surface-container-lowest border-b border-border-subtle px-6 py-4 flex justify-between items-center shadow-sm">
+<div class="flex items-center gap-4">
+<div class="bg-primary-container text-on-primary rounded-lg p-2 flex items-center justify-center">
+<i class="ri-dashboard-2-fill text-xl text-white"></i>
+</div>
+<div>
+<h1 class="text-xl font-bold text-on-surface">G-Lifter 배치 의사결정 시스템 </h1>
+
+</div>
+</div>
+<div class="flex items-center gap-6"><button class="flex items-center gap-2 px-4 py-1.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-xs font-bold transition-opacity shadow-sm border border-white/20"><span class="material-symbols-outlined text-lg">play_arrow</span><span class="">분석 시작</span></button><button class="flex items-center gap-2 px-3 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface rounded-lg text-xs font-medium transition-colors border border-border-subtle" onclick="document.getElementById('operational-settings-modal').classList.remove('hidden')"><span class="material-symbols-outlined text-lg">settings</span><h3 class="font-bold text-on-surface flex items-center gap-2" style="--tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgb(59 130 246 / 0.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; --tw-text-opacity: 1; color: rgb(13, 26, 59); text-align: start; outline: none !important; box-shadow: none !important;">데이터 소스 업로드 및 제어</h3></button>
+<div class="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-status-success rounded-full text-xs font-medium border border-green-100">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-status-success"></span>
+</span>
+        시스템 정상
+      </div>
+<div class="flex items-center gap-2 text-on-surface-variant text-sm">
+<i class="ri-time-line"></i>
+<span class="">14시 30분 45초</span>
+</div>
+<div class="text-xs text-outline border-l border-border-subtle pl-4">
+        v2.5.1
+      </div>
+</div>
+</header>
+<!-- END: Header -->
+<!-- BEGIN: Main Content -->
+<main class="flex-1 p-6 flex flex-col gap-6 overflow-x-hidden">
+<!-- Top Row: KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<div class="bg-surface-container-lowest rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
+<div>
+<p class="text-xs text-on-surface-variant font-medium mb-1">총 입고 차량</p>
+<h4 class="text-2xl font-bold text-on-surface">14,250<span class="text-sm font-normal text-on-surface-variant ml-1">대</span></h4>
+</div>
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary-container">
+<i class="ri-car-line text-xl"></i>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between"><div class=""><p class="text-xs text-on-surface-variant font-medium mb-1">MTO 오더 비율</p><h4 class="text-2xl font-bold text-on-surface">29.2<span class="text-sm font-normal text-on-surface-variant ml-1">%</span></h4></div><div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary-container"><i class="ri-file-list-3-line text-xl"></i></div></div>
+<div class="bg-surface-container-lowest rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
+<div>
+<p class="text-xs text-on-surface-variant font-medium mb-1">고위험 셀(셔플링)</p>
+<h4 class="text-2xl font-bold text-status-alert">38<span class="text-sm font-normal text-on-surface-variant ml-1">셀</span></h4>
+</div>
+<div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-status-alert">
+<i class="ri-error-warning-line text-xl"></i>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between"><div class=""><p class="text-xs text-on-surface-variant font-medium mb-1">예상 절감 시간</p><h4 class="text-2xl font-bold text-on-surface">117<span class="text-sm font-normal text-on-surface-variant ml-1">분</span></h4></div><div class="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600"><i class="ri-time-line text-xl"></i></div></div>
+</div>
+<!-- Middle Row: Main Analysis -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 h-[500px]">
+<!-- Yard Layout Heatmap -->
+<section class="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-border-subtle shadow-sm flex flex-col h-full overflow-hidden">
+<div class="p-4 border-b border-border-subtle flex justify-between items-center bg-surface-container-lowest">
+<h2 class="font-bold flex items-center gap-2 text-on-surface">
+<i class="ri-layout-grid-fill text-primary-container"></i> 야드 배치 현황</h2>
+<div class="flex items-center gap-4 text-[10px] text-on-surface-variant">
+<div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-status-alert"></span> 고위험</div>
+<div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-yellow-400"></span> 중위험</div>
+<div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-surface-container-high"></span> 정상</div>
+<div class="flex items-center gap-1.5 relative"><div class="w-3 h-3 rounded-full border border-primary-container bg-surface-container-lowest shadow-sm flex items-center justify-center"><div class="w-1.5 h-1.5 rounded-full bg-primary-container"></div></div> G-Lifter 추천</div>
+</div>
+</div>
+<div class="flex-1 overflow-auto custom-scrollbar p-6 flex flex-col items-center justify-center bg-surface-container-low/30">
+<div class="min-w-[500px] flex flex-col gap-1.5 w-full max-w-3xl">
+<!-- Column Headers A-V -->
+<div class="flex gap-1.5 pl-8">
+<div class="flex-1 text-[10px] text-center text-outline font-bold">A</div><div class="flex-1 text-[10px] text-center text-outline font-bold">B</div><div class="flex-1 text-[10px] text-center text-outline font-bold">C</div><div class="flex-1 text-[10px] text-center text-outline font-bold">D</div><div class="flex-1 text-[10px] text-center text-outline font-bold">E</div><div class="flex-1 text-[10px] text-center text-outline font-bold">F</div><div class="flex-1 text-[10px] text-center text-outline font-bold">G</div><div class="flex-1 text-[10px] text-center text-outline font-bold">H</div><div class="flex-1 text-[10px] text-center text-outline font-bold">I</div><div class="flex-1 text-[10px] text-center text-outline font-bold">J</div><div class="flex-1 text-[10px] text-center text-outline font-bold">K</div><div class="flex-1 text-[10px] text-center text-outline font-bold">L</div><div class="flex-1 text-[10px] text-center text-outline font-bold">M</div><div class="flex-1 text-[10px] text-center text-outline font-bold">N</div><div class="flex-1 text-[10px] text-center text-outline font-bold">O</div><div class="flex-1 text-[10px] text-center text-outline font-bold">P</div><div class="flex-1 text-[10px] text-center text-outline font-bold">Q</div><div class="flex-1 text-[10px] text-center text-outline font-bold">R</div><div class="flex-1 text-[10px] text-center text-outline font-bold">S</div><div class="flex-1 text-[10px] text-center text-outline font-bold">T</div><div class="flex-1 text-[10px] text-center text-outline font-bold">U</div><div class="flex-1 text-[10px] text-center text-outline font-bold">V</div>
+</div>
+<!-- Rows D1-D5 -->
+<div class="flex flex-col gap-1.5">
+<div class="flex gap-1.5 items-center"><span class="w-6 text-[10px] font-bold text-outline text-right pr-2">D1</span><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-A')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-B')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-C')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-D')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-E')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-F')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-G')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-H')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-I')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-J')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-K')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-L')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity relative flex items-center justify-center" onclick="showCellDetails('D1-M')"><div class="absolute w-5 h-5 rounded-full border-2 border-primary-container bg-surface-container-lowest shadow-sm animate-pulse"></div><div class="absolute w-2.5 h-2.5 rounded-full bg-primary-container"></div></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-N')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-O')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-P')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-Q')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-R')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-S')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-T')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-U')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D1-V')"></div></div>
+<div class="flex gap-1.5 items-center"><span class="w-6 text-[10px] font-bold text-outline text-right pr-2">D2</span><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-A')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-B')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-C')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-D')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-E')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-F')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-G')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-H')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-I')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-J')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-K')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-L')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-M')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-N')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-O')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-P')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-Q')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-R')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-S')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-T')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-U')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D2-V')"></div></div>
+<div class="flex gap-1.5 items-center"><span class="w-6 text-[10px] font-bold text-outline text-right pr-2">D3</span><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-A')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-B')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-C')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-D')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-E')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-F')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-G')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-H')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-I')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-J')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-K')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-L')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-M')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-N')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-O')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-P')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-Q')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-R')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-S')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-T')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-U')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D3-V')"></div></div>
+<div class="flex gap-1.5 items-center"><span class="w-6 text-[10px] font-bold text-outline text-right pr-2">D4</span><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-A')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-B')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-C')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-D')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-E')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-F')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-G')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-H')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-I')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-J')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-K')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-L')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-M')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-N')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-O')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-P')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-Q')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-R')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-S')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-T')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-U')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D4-V')"></div></div>
+<div class="flex gap-1.5 items-center"><span class="w-6 text-[10px] font-bold text-outline text-right pr-2">D5</span><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-A')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-B')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-C')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-D')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-E')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-F')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-G')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-H')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-I')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-J')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-K')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-L')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-M')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-N')"></div><div class="flex-1 h-8 bg-status-alert rounded shadow-sm ring-1 ring-status-alert cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-O')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-P')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-Q')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-R')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-S')"></div><div class="flex-1 h-8 bg-yellow-400 rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-T')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-U')"></div><div class="flex-1 h-8 bg-surface-container-high rounded cursor-pointer hover:opacity-80 transition-opacity" onclick="showCellDetails('D5-V')"></div></div>
+</div>
+</div>
+<p class="text-xs text-on-surface-variant mt-6 italic">* 셀을 클릭하여 상세 상태를 확인하세요.</p>
+</div>
+</section>
+<!-- AI Analysis Briefing -->
+<section class="lg:col-span-1 bg-primary-container text-white rounded-xl flex flex-col overflow-hidden shadow-md h-full relative">
+<!-- Default Briefing -->
+<div class="flex flex-col h-full absolute inset-0 bg-primary-container transition-opacity duration-300 hidden" id="ai-briefing-default">
+<div class="p-4 border-b border-white/10 flex items-center gap-2">
+<i class="ri-robot-2-line text-primary-fixed-dim"></i>
+<h3 class="font-bold">AI 의사결정 브리핑</h3>
+</div>
+<div class="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5 text-sm">
+<div class="space-y-1.5">
+<span class="text-xs text-white/60 font-semibold uppercase tracking-wider">진단 (Diagnosis)</span>
+<p class="text-white/90 leading-relaxed">총 14,250대의 입고 차량 중 38개의 고위험 셀이 식별되었으며, 심부(Depth 3) 위치로 인한 병목이 예상됩니다.</p>
+</div>
+<div class="space-y-1.5">
+<span class="text-xs text-white/60 font-semibold uppercase tracking-wider">원인 (Cause)</span>
+<p class="text-white/90 leading-relaxed">B 구역 3열, C 구역 5열에 MTO 차량이 섞여 있어 셔플링 연쇄 작용 발생 가능성이 높습니다.</p>
+</div>
+<div class="space-y-1.5">
+<span class="text-xs text-white/60 font-semibold uppercase tracking-wider">예측 (Prediction)</span>
+<p class="text-white/90 leading-relaxed">2대의 G-Lifter 인양 작업 투입 시, 셔플링 해소에 약 15분이 소요되며, Direct 출고율은 85%로 개선될 것으로 보입니다.</p>
+</div>
+<div class="bg-white/10 p-4 rounded-lg border border-white/5 mt-auto">
+<span class="text-xs text-primary-fixed-dim font-semibold flex items-center gap-1.5 mb-2">
+<i class="ri-lightbulb-flash-line text-lg"></i> 추천 (Recommendation)
+                </span>
+<p class="text-white/80 text-sm leading-relaxed">G-Lifter 1호기를 B 구역에 선제 투입하여 G-Lifter 인양을 통한 셔플링 차량 사전 이동 및 공간 확보를 권장합니다.</p>
+</div>
+</div>
+<div class="p-3 bg-black/20 border-t border-white/10 flex justify-between items-center text-xs">
+<span class="text-white/60">AI 신뢰도: <span class="text-status-success font-medium">92%</span></span>
+<span class="text-white/50"><i class="ri-cpu-line"></i> G-Logic v2.4</span>
+</div>
+</div>
+<!-- Detailed Cell Analysis (Hidden by default) -->
+<div class="flex flex-col h-full absolute inset-0 bg-primary-container transition-opacity duration-300" id="ai-briefing-detail">
+<div class="p-4 border-b border-white/10 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<i class="ri-search-eye-line text-status-alert"></i>
+<h3 class="font-bold">셀 상세 분석: <span class="text-primary-fixed-dim font-mono" id="detail-cell-id">D1-O</span></h3>
+</div>
+<button class="flex items-center gap-2 px-5 py-2.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-sm font-bold transition-opacity shadow-md ml-4 border border-white/10"><span class="material-symbols-outlined text-lg">download</span><span class="">결과 다운로드</span></button>
+</div>
+<div class="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5 text-sm">
+<div class="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-3">
+<i class="ri-error-warning-fill text-status-alert mt-0.5"></i>
+<div>
+<h4 class="text-status-alert font-medium mb-1">3 (심부)</h4>
+<p class="text-white/80 text-xs">해당 셀은&nbsp;<span style="font-size: 0.75rem;" class="">MTO/MTS 혼재도가 높아 G-Lifter 선제 투입이 시급합니다.</span></p>
+</div>
+</div>
+<div class="space-y-4">
+<div>
+<span class="text-xs text-white/60 font-semibold mb-1 block">차량 구성</span>
+<div class="flex justify-between items-center text-sm border-b border-white/10 pb-2">
+<span class="text-white/80">MTO (주문 생산)</span>
+<span class="font-medium text-white">3대</span>
+</div>
+<div class="flex justify-between items-center text-sm border-b border-white/10 py-2">
+<span class="text-white/80">MTS (재고 생산)</span>
+<span class="font-medium text-white">1대</span>
+</div>
+<div class="flex justify-between items-center text-sm py-2">
+<span class="text-white/80">Depth</span>
+<span class="font-medium text-status-alert">3 (심부)</span>
+</div>
+</div>
+<div>
+<span class="text-xs text-white/60 font-semibold mb-1 block">해결 방안</span>
+<p class="text-white/90 text-sm leading-relaxed">G-Lifter를 해당 셀 상단에 배치하여 심부에 위치한 셔플링 대상 차량을 수직 인양하여 출고 경로를 즉시 확보해야 합니다.</p>
+</div>
+</div>
+<button class="w-full mt-auto bg-white/10 hover:bg-white/20 text-white font-medium py-2.5 rounded-md flex items-center justify-center gap-2 transition-colors border border-white/20"><i class="ri-cpu-line"></i> G-Lifter 수직 인양 작업 지시</button>
+</div>
+</div>
+</section>
+</div>
+<!-- Bottom Section: Dashboards -->
+<div class="flex flex-col gap-6">
+<!-- BEGIN: Bottom Section (Heatmaps) -->
+<section class="bg-surface-container-lowest rounded-xl border border-border-subtle shadow-sm p-4 flex flex-col gap-4"><div class="flex justify-between items-center border-b border-border-subtle pb-3">
+<h3 class="font-bold text-on-surface flex items-center gap-2"><i class="ri-map-2-line text-primary-container"></i> 야드 셔플링 위험도 변화</h3>
+<div class="flex items-center gap-4 text-[10px] text-on-surface-variant">
+<div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-status-alert"></span> 고위험 (셔플링)</div>
+<div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-yellow-400"></span> 중위험 (관찰)</div>
+<div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-surface-container-high"></span> 정상</div>
+<div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-status-success"></span> 해소/정상</div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
+<!-- Before Map -->
+<div class="flex flex-col items-center">
+<h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-6">BEFORE DISPATCH (RISK ASSESSMENT)</h4>
+<div class="w-full overflow-x-auto custom-scrollbar">
+<div class="min-w-[320px] flex flex-col gap-1">
+<!-- Column Headers A-V -->
+<div class="flex gap-1 pl-6">
+<div class="flex-1 text-[8px] text-center text-outline font-bold">A</div><div class="flex-1 text-[8px] text-center text-outline font-bold">B</div><div class="flex-1 text-[8px] text-center text-outline font-bold">C</div><div class="flex-1 text-[8px] text-center text-outline font-bold">D</div><div class="flex-1 text-[8px] text-center text-outline font-bold">E</div><div class="flex-1 text-[8px] text-center text-outline font-bold">F</div><div class="flex-1 text-[8px] text-center text-outline font-bold">G</div><div class="flex-1 text-[8px] text-center text-outline font-bold">H</div><div class="flex-1 text-[8px] text-center text-outline font-bold">I</div><div class="flex-1 text-[8px] text-center text-outline font-bold">J</div><div class="flex-1 text-[8px] text-center text-outline font-bold">K</div><div class="flex-1 text-[8px] text-center text-outline font-bold">L</div><div class="flex-1 text-[8px] text-center text-outline font-bold">M</div><div class="flex-1 text-[8px] text-center text-outline font-bold">N</div><div class="flex-1 text-[8px] text-center text-outline font-bold">O</div><div class="flex-1 text-[8px] text-center text-outline font-bold">P</div><div class="flex-1 text-[8px] text-center text-outline font-bold">Q</div><div class="flex-1 text-[8px] text-center text-outline font-bold">R</div><div class="flex-1 text-[8px] text-center text-outline font-bold">S</div><div class="flex-1 text-[8px] text-center text-outline font-bold">T</div><div class="flex-1 text-[8px] text-center text-outline font-bold">U</div><div class="flex-1 text-[8px] text-center text-outline font-bold">V</div>
+</div>
+<!-- Rows D1-D5 -->
+<div class="flex flex-col gap-1">
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D1</span><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div></div>
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D2</span><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div></div>
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D3</span><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div></div>
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D4</span><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div></div>
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D5</span><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div></div>
+</div>
+</div>
+</div>
+</div>
+<!-- After Map -->
+<div class="flex flex-col items-center">
+<h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-6">AFTER DISPATCH (RESOLUTION STATUS)</h4>
+<div class="w-full overflow-x-auto custom-scrollbar">
+<div class="min-w-[320px] flex flex-col gap-1">
+<!-- Column Headers A-V -->
+<div class="flex gap-1 pl-6">
+<div class="flex-1 text-[8px] text-center text-outline font-bold">A</div><div class="flex-1 text-[8px] text-center text-outline font-bold">B</div><div class="flex-1 text-[8px] text-center text-outline font-bold">C</div><div class="flex-1 text-[8px] text-center text-outline font-bold">D</div><div class="flex-1 text-[8px] text-center text-outline font-bold">E</div><div class="flex-1 text-[8px] text-center text-outline font-bold">F</div><div class="flex-1 text-[8px] text-center text-outline font-bold">G</div><div class="flex-1 text-[8px] text-center text-outline font-bold">H</div><div class="flex-1 text-[8px] text-center text-outline font-bold">I</div><div class="flex-1 text-[8px] text-center text-outline font-bold">J</div><div class="flex-1 text-[8px] text-center text-outline font-bold">K</div><div class="flex-1 text-[8px] text-center text-outline font-bold">L</div><div class="flex-1 text-[8px] text-center text-outline font-bold">M</div><div class="flex-1 text-[8px] text-center text-outline font-bold">N</div><div class="flex-1 text-[8px] text-center text-outline font-bold">O</div><div class="flex-1 text-[8px] text-center text-outline font-bold">P</div><div class="flex-1 text-[8px] text-center text-outline font-bold">Q</div><div class="flex-1 text-[8px] text-center text-outline font-bold">R</div><div class="flex-1 text-[8px] text-center text-outline font-bold">S</div><div class="flex-1 text-[8px] text-center text-outline font-bold">T</div><div class="flex-1 text-[8px] text-center text-outline font-bold">U</div><div class="flex-1 text-[8px] text-center text-outline font-bold">V</div>
+</div>
+<!-- Rows D1-D5 -->
+<div class="flex flex-col gap-1">
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D1</span><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm relative flex items-center justify-center"><div class="absolute w-4 h-4 rounded-full border-2 border-primary-container bg-surface-container-lowest shadow-sm animate-pulse"></div><div class="absolute w-2 h-2 rounded-full bg-primary-container"></div></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div></div>
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D2</span><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm relative flex items-center justify-center"><div class="absolute w-4 h-4 rounded-full border-2 border-primary-container bg-surface-container-lowest shadow-sm animate-pulse"></div><div class="absolute w-2 h-2 rounded-full bg-primary-container"></div></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div></div>
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D3</span><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm relative flex items-center justify-center"><div class="absolute w-4 h-4 rounded-full border-2 border-primary-container bg-surface-container-lowest shadow-sm animate-pulse"></div><div class="absolute w-2 h-2 rounded-full bg-primary-container"></div></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div></div>
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D4</span><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-alert rounded-sm"></div></div>
+<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D5</span><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-status-success rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-yellow-400 rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div><div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Bottom Section -->
+<!-- New: Operational Performance Dashboard -->
+<section class="bg-surface-container-lowest rounded-xl border border-border-subtle shadow-sm flex flex-col overflow-hidden">
+<div class="p-4 border-b border-border-subtle bg-surface-container-lowest flex justify-between items-center">
+<h3 class="font-bold text-on-surface flex items-center gap-2">
+<i class="ri-dashboard-3-line text-primary-container"></i> 운영 성과 대시보드
+          </h3>
+<div class="flex gap-4">
+<div class="flex items-center gap-2">
+<span class="text-xs text-on-surface-variant">셔플링 해소 완료</span>
+<span class="bg-primary-container text-white px-2 py-0.5 rounded-full text-xs font-bold">114대</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs text-on-surface-variant">Direct 출고율</span>
+<div class="flex items-center gap-1">
+<span class="text-xs font-bold text-status-success">85%</span>
+<i class="ri-arrow-up-line text-status-success text-xs"></i>
+</div>
+</div>
+<button class="flex items-center gap-2 px-5 py-2.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-sm font-bold transition-opacity shadow-md ml-4 border border-white/10"><span class="material-symbols-outlined text-lg">download</span><span class="">결과 다운로드</span></button></div>
+</div>
+<div class="grid grid-cols-1 divide-y divide-border-subtle">
+<!-- Logs Table -->
+
+<!-- Progress Indicator -->
+<div class="lg:col-span-1 p-6 flex flex-col justify-center gap-6">
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="text-sm font-semibold text-on-surface">Direct 출고율 개선</span>
+<span class="text-xl font-bold text-primary-container">85%</span>
+</div>
+<div class="bg-surface-container-high rounded-full h-2.5 w-full"><div class="bg-primary-container h-2.5 rounded-full" style="width: 85%;"></div></div>
+<p class="text-xs text-on-surface-variant mt-2 text-right">목표: 90%</p>
+</div>
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="text-sm font-semibold text-on-surface">셔플링 해소 진척도</span>
+<span class="text-xl font-bold text-primary-container">114/152대</span>
+</div>
+<div class="bg-surface-container-high rounded-full h-2.5 w-full"><div class="bg-status-success h-2.5 rounded-full" style="width: 75%;"></div></div>
+<p class="text-xs text-on-surface-variant mt-2 text-right">잔여: 38대</p>
+</div>
+</div>
+</div>
+</section><section class="bg-surface-container-lowest rounded-xl border border-border-subtle shadow-sm flex flex-col overflow-hidden mt-6">
+  <div class="px-4 py-3 border-b border-border-subtle bg-surface-container-low/30 flex items-center gap-2">
+    <span class="material-symbols-outlined text-primary-container text-lg">history</span>
+    <h4 class="text-sm font-bold text-on-surface">G-Lifter 타임라인</h4>
+  </div>
+  <div class="overflow-y-auto custom-scrollbar h-64">
+    <table class="w-full text-left text-sm whitespace-nowrap">
+      <thead class="bg-surface-container-low border-b border-border-subtle text-on-surface-variant sticky top-0">
+        <tr>
+          <th class="px-4 py-2 font-medium">시간</th>
+          <th class="px-4 py-2 font-medium">기기</th>
+          <th class="px-4 py-2 font-medium">작업 구분</th>
+          <th class="px-4 py-2 font-medium">출발</th>
+          <th class="px-4 py-2 font-medium">도착</th>
+          <th class="px-4 py-2 font-medium">상태</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-subtle text-on-surface">
+        <tr class="hover:bg-surface-container-low transition-colors">
+          <td class="px-4 py-2.5 text-xs text-on-surface-variant">00:00:15</td>
+          <td class="px-4 py-2.5"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-01</span></td>
+          <td class="px-4 py-2.5">셔플링 이동</td>
+          <td class="px-4 py-2.5 font-mono text-xs">B-03-01</td>
+          <td class="px-4 py-2.5 font-mono text-xs">A-05-02</td>
+          <td class="px-4 py-2.5"><span class="text-status-success font-medium"><i class="ri-checkbox-circle-line"></i> 완료</span></td>
+        </tr>
+        <tr class="hover:bg-surface-container-low transition-colors">
+          <td class="px-4 py-2.5 text-xs text-on-surface-variant">00:01:30</td>
+          <td class="px-4 py-2.5"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-02</span></td>
+          <td class="px-4 py-2.5">목표 차량 인출</td>
+          <td class="px-4 py-2.5 font-mono text-xs">C-05-03</td>
+          <td class="px-4 py-2.5 font-mono text-xs">출구 A</td>
+          <td class="px-4 py-2.5"><span class="text-status-success font-medium"><i class="ri-checkbox-circle-line"></i> 완료</span></td>
+        </tr>
+        <tr class="hover:bg-surface-container-low transition-colors bg-yellow-50/30">
+          <td class="px-4 py-2.5 text-xs text-on-surface-variant">00:03:45</td>
+          <td class="px-4 py-2.5"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-01</span></td>
+          <td class="px-4 py-2.5">대기 (경로 간섭)</td>
+          <td class="px-4 py-2.5 font-mono text-xs">-</td>
+          <td class="px-4 py-2.5 font-mono text-xs">-</td>
+          <td class="px-4 py-2.5"><span class="text-yellow-600 font-medium"><i class="ri-loader-4-line animate-spin inline-block"></i> 진행중</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="p-3 bg-surface-container-lowest border-t border-border-subtle flex justify-between items-center text-xs text-on-surface-variant">
+    <span class="">총 24건의 이동 기록</span>
+    <button class="text-primary-container hover:underline font-medium" onclick="document.getElementById('timeline-modal').classList.remove('hidden')">자세히 보기</button>
+  </div>
+</section>
+</div>
+</main>
+<!-- END: Main Content -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden" id="operational-settings-modal"><div class="bg-surface-container-lowest w-[400px] rounded-xl shadow-xl border border-border-subtle overflow-hidden flex flex-col"><div class="p-4 border-b border-border-subtle flex justify-between items-center bg-surface-container-low"><h3 class="font-bold text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-primary-container">settings</span>데이터 소스 업로드 및 제어</h3><button class="text-on-surface-variant hover:text-on-surface" onclick="document.getElementById('operational-settings-modal').classList.add('hidden')"><span class="material-symbols-outlined">close</span></button></div><div class="p-6 space-y-6 overflow-y-auto max-h-[80vh] custom-scrollbar"><div class="space-y-3"><h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">데이터 소스</h4><div class="grid gap-3"><div class="border-2 border-dashed border-outline-variant rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-low cursor-pointer transition-colors"><span class="material-symbols-outlined text-3xl text-outline">upload_file</span><div class="text-center"><p class="text-sm font-semibold text-on-surface">야드 마스터 엑셀 업로드</p><p class="text-[10px] text-on-surface-variant">(현재 야드 상태)</p></div></div><div class="border-2 border-dashed border-outline-variant rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-low cursor-pointer transition-colors"><span class="material-symbols-outlined text-3xl text-outline">description</span><div class="text-center"><p class="text-sm font-semibold text-on-surface">번호판 CSV 업로드</p><p class="text-[10px] text-on-surface-variant">(출고 대상 리스트)</p></div></div></div></div><div class="space-y-4"><h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">시뮬레이션 파라미터</h4><div class="space-y-3"><div><label class="block text-xs text-on-surface-variant mb-1.5">G-Lifter 대수 (최적화)</label><div class="relative"><input class="w-full bg-surface-container-low border border-border-subtle rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary-container outline-none" type="number" value="2"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-on-surface-variant">대</span></div></div><div><label class="block text-xs text-on-surface-variant mb-1.5">시뮬레이션 속도</label><select class="w-full bg-surface-container-low border border-border-subtle rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary-container outline-none appearance-none"><option>1x (표준)</option><option selected="">2x (빠르게)</option><option>5x (매우 빠르게)</option></select></div></div></div></div><div class="p-6 bg-surface-container-low border-t border-border-subtle space-y-3"><button class="w-full bg-primary-container text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md"><span class="material-symbols-outlined">play_arrow</span> 분석 시작</button><div class="grid grid-cols-2 gap-3"><button class="bg-surface-container-lowest border border-border-subtle text-on-surface text-xs font-semibold py-2.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-sm">download</span> 결과 다운로드</button><button class="bg-surface-container-lowest border border-border-subtle text-on-surface text-xs font-semibold py-2.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-sm">refresh</span> 초기화</button></div></div></div></div>
+
+<div id="timeline-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden"><div class="bg-surface-container-lowest w-full max-w-3xl rounded-xl shadow-xl border border-border-subtle overflow-hidden flex flex-col"><div class="p-4 border-b border-border-subtle flex justify-between items-center bg-primary-container text-white"><h3 class="font-bold flex items-center gap-2"><span class="material-symbols-outlined">history</span> G-Lifter 전체 운영 타임라인</h3><button class="text-white/80 hover:text-white" onclick="document.getElementById('timeline-modal').classList.add('hidden')"><span class="material-symbols-outlined">close</span></button></div><div class="p-0 overflow-y-auto max-h-[70vh] custom-scrollbar"><table class="w-full text-left text-sm whitespace-nowrap"><thead class="bg-surface-container-low border-b border-border-subtle text-on-surface-variant sticky top-0"><tr><th class="px-6 py-3 font-medium">시간</th><th class="px-6 py-3 font-medium">기기</th><th class="px-6 py-3 font-medium">작업 구분</th><th class="px-6 py-3 font-medium">출발</th><th class="px-6 py-3 font-medium">도착</th><th class="px-6 py-3 font-medium">상태</th></tr></thead><tbody class="divide-y divide-border-subtle text-on-surface"><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:00:15</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-01</span></td><td class="px-6 py-3">셔플링 이동</td><td class="px-6 py-3 font-mono text-xs">B-03-01</td><td class="px-6 py-3 font-mono text-xs">A-05-02</td><td class="px-6 py-3"><span class="text-status-success font-medium">완료</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:01:30</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-02</span></td><td class="px-6 py-3">목표 차량 인출</td><td class="px-6 py-3 font-mono text-xs">C-05-03</td><td class="px-6 py-3 font-mono text-xs">출구 A</td><td class="px-6 py-3"><span class="text-status-success font-medium">완료</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:03:45</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-01</span></td><td class="px-6 py-3">대기 (경로 간섭)</td><td class="px-6 py-3 font-mono text-xs">-</td><td class="px-6 py-3 font-mono text-xs">-</td><td class="px-6 py-3"><span class="text-yellow-600 font-medium">진행중</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:05:10</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-02</span></td><td class="px-6 py-3">셔플링 이동</td><td class="px-6 py-3 font-mono text-xs">D-01-05</td><td class="px-6 py-3 font-mono text-xs">E-02-01</td><td class="px-6 py-3"><span class="text-status-success font-medium">완료</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:07:22</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-01</span></td><td class="px-6 py-3">수직 인양</td><td class="px-6 py-3 font-mono text-xs">B-04-02</td><td class="px-6 py-3 font-mono text-xs">B-04-01</td><td class="px-6 py-3"><span class="text-status-success font-medium">완료</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:09:45</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-02</span></td><td class="px-6 py-3">목표 차량 인출</td><td class="px-6 py-3 font-mono text-xs">A-02-04</td><td class="px-6 py-3 font-mono text-xs">출구 B</td><td class="px-6 py-3"><span class="text-status-success font-medium">완료</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:12:05</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-01</span></td><td class="px-6 py-3">셔플링 이동</td><td class="px-6 py-3 font-mono text-xs">C-01-01</td><td class="px-6 py-3 font-mono text-xs">D-05-05</td><td class="px-6 py-3"><span class="text-status-success font-medium">완료</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:14:30</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-02</span></td><td class="px-6 py-3">대기 (충전)</td><td class="px-6 py-3 font-mono text-xs">-</td><td class="px-6 py-3 font-mono text-xs">Station 1</td><td class="px-6 py-3"><span class="text-on-surface-variant font-medium">대기</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:16:55</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-01</span></td><td class="px-6 py-3">목표 차량 인출</td><td class="px-6 py-3 font-mono text-xs">E-03-02</td><td class="px-6 py-3 font-mono text-xs">출구 A</td><td class="px-6 py-3"><span class="text-status-success font-medium">완료</span></td></tr><tr class="hover:bg-surface-container-low transition-colors"><td class="px-6 py-3 text-xs text-on-surface-variant">00:18:40</td><td class="px-6 py-3"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">GL-02</span></td><td class="px-6 py-3">셔플링 이동</td><td class="px-6 py-3 font-mono text-xs">B-05-01</td><td class="px-6 py-3 font-mono text-xs">A-01-03</td><td class="px-6 py-3"><span class="text-status-success font-medium">완료</span></td></tr></tbody></table></div><div class="p-4 bg-surface-container-low border-t border-border-subtle flex justify-end"><button class="px-4 py-2 bg-surface-container-lowest border border-border-subtle text-on-surface text-sm font-semibold rounded-lg hover:bg-surface-container-high transition-colors" onclick="document.getElementById('timeline-modal').classList.add('hidden')">닫기</button></div></div></div>
+
+</body></html>

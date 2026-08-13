@@ -1,6 +1,7 @@
 # 환경 변수 (비밀 키, API 키 등)
 .env
 .env.*
+!.env.example
 
 # 프론트엔드 (yarn/typescript)
 frontend/node_modules/
