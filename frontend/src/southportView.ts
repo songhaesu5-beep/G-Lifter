@@ -168,7 +168,7 @@ export function drawSatellite(svgId: string, mode: 'before' | 'after'){
     label.setAttribute('stroke','rgba(0,0,0,0.55)');
     label.setAttribute('stroke-width','0.6');
     const removedCnt = it.slots.filter(s => s.removed).length;
-    label.textContent = cell.id + ' · 셔플 ' + cell.shuffleCount + '대' + (removedCnt ? ' · 출고 ' + removedCnt + '대' : '');
+    label.textContent = cell.id + (removedCnt ? ' · 출고 ' + removedCnt + '대' : '');
     svg.appendChild(label);
   });
 
@@ -211,14 +211,5 @@ export function drawSatellite(svgId: string, mode: 'before' | 'after'){
         svg.appendChild(t);
       }
     });
-
-    // 범례
-    const lg = el('text');
-    lg.setAttribute('x','24'); lg.setAttribute('y', String(IMG_H - 14));
-    lg.setAttribute('font-size','15'); lg.setAttribute('font-weight','600');
-    lg.setAttribute('fill','#f1f5f9');
-    lg.setAttribute('stroke','rgba(0,0,0,0.6)'); lg.setAttribute('stroke-width','0.5');
-    lg.textContent = '■ 행3 셔플링(blocking) · □ 일반 차량 · ▨ 출고 완료(검정) · ● G-Lifter';
-    svg.appendChild(lg);
   }
 }

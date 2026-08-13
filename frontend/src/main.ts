@@ -311,31 +311,31 @@ function resetOutputs(){
   resetSatelliteCache();   // 위성 뷰 캐시 리셋
   historyStack = [];
   all$('btn-undo').forEach((b: any)=> b.disabled = true);
-  $('ai-progress').style.width = '0%';
-  $('ai-progress-label').textContent = '0%';
-  $('ai-resolved').textContent = 0;
-  $('ai-pending').textContent = 0;
-  $('ai-direct').textContent = 0;
-  $('ai-moves').textContent = 0;
-  $('ai-resolved-bar').textContent = 0;
-  $('ai-resolved-bar2').textContent = 0;
-  $('ai-shuffle-total').textContent = 0;
-  $('ai-pending-bar').textContent = 0;
-  $('prog-direct').style.width = '0%';
-  $('kpi-direct-rate').textContent = '0%';
-  $('kpi-direct-rate2').textContent = '0%';
-  $('gl-timeline-count').textContent = 0;
-  $('kpi-saved').textContent = 0;
-  $('kpi-compare').textContent = '—';
-  $('ai-diagnosis').textContent = '—';
-  $('ai-cell-analysis').textContent = '—';
-  $('ai-prediction').textContent = '—';
-  $('ai-recommendation').textContent = '—';
-  $('verdict-text').textContent = '';
-  $('cell-result-log').innerHTML = '셀별 해소 결과: 출고 실행 후 표시됩니다.';
-  $('gl-board').innerHTML = '🚚 G-Lifter 이동 현황: 출고 실행 후 표시됩니다.';
-  $('gl-timeline').innerHTML = '<tr><td colspan="6" class="px-4 py-3 text-center text-xs text-on-surface-variant">출고 실행 후 표시됩니다</td></tr>';
-  $('gl-timeline-full').innerHTML = '';
+  setW('ai-progress', '0%');
+  setT('ai-progress-label', '0%');
+  setT('ai-resolved', 0);
+  setT('ai-pending', 0);
+  setT('ai-direct', 0);
+  setT('ai-moves', 0);
+  setT('ai-resolved-bar', 0);
+  setT('ai-resolved-bar2', 0);
+  setT('ai-shuffle-total', 0);
+  setT('ai-pending-bar', 0);
+  setW('prog-direct', '0%');
+  setT('kpi-direct-rate', '0%');
+  setT('kpi-direct-rate2', '0%');
+  setT('kpi-saved', 0);
+  setT('kpi-compare', '—');
+  setT('ai-diagnosis', '—');
+  setT('ai-cell-analysis', '—');
+  setT('ai-prediction', '—');
+  setT('ai-recommendation', '—');
+  setT('verdict-text', '');
+  setH('cell-result-log', '셀별 해소 결과: 출고 실행 후 표시됩니다.');
+  setH('gl-board', 'G-Lifter 이동 현황: 출고 실행 후 표시됩니다.');
+  setH('gl-timeline', '<tr><td colspan="6" class="px-4 py-3 text-center text-xs text-on-surface-variant">출고 실행 후 표시됩니다</td></tr>');
+  setH('gl-timeline-full', '');
+  setT('gl-timeline-count', 0);
 }
 
 let isRunning = false;
@@ -387,10 +387,10 @@ function undoStep(){
 
 function setRunning(run){
   isRunning = run;
-  ['btn-export','btn-reset'].forEach(id=>{
-    $(id).disabled = run;
-  });
-  all$('btn-run').forEach((b: any)=> b.textContent = run ? '⏭️ 다음 단계 진행' : '▶️ 분석 시작');
+  all$('btn-export').forEach((b: any)=> b.disabled = run);
+  all$('btn-reset').forEach((b: any)=> b.disabled = run);
+  const label = run ? '⏭️ 분석 진행' : (simDone ? '✅ 분석 완료' : '분석 시작');
+  all$('btn-run').forEach((b: any)=> b.textContent = label);
 }
 
 function runDispatch(){
@@ -424,7 +424,7 @@ function runDispatch(){
   stepState = {plates: orderedPlates, idx:0, seq:0, t:0, matched:0, unmatched:0, unmatchedList:[], dispatchShuffle, dispatchedResolved: 0};
 
   setRunning(true);
-  drawHeatmap('heatmap-before','before');
+  drawHeatmaps();
   $('sim-progress').textContent = '출고 실행 중... 0/' + plates.length + '대 · 경과 0분';
   addLog('[출고 실행] 단계별 시뮬레이션 시작: ' + plates.length + '대 지시 · 버튼 클릭마다 1단계 진행');
   stepTick();
@@ -472,34 +472,34 @@ async function updateAI(){
   const state = collectAIState();
   const st = stepState;
   // 해소 진척도 (진행 바 + 라벨)
-  $('ai-progress').style.width = state.rate + '%';
-  $('ai-progress-label').textContent = state.rate + '%';
-  $('ai-resolved-bar').textContent = state.resolved;
-  $('ai-shuffle-total').textContent = state.shuffleTotal;
-  $('ai-pending-bar').textContent = state.pending;
+  setW('ai-progress', state.rate + '%');
+  setT('ai-progress-label', state.rate + '%');
+  setT('ai-resolved-bar', state.resolved);
+  setT('ai-resolved-bar2', state.resolved);
+  setT('ai-shuffle-total', state.shuffleTotal);
+  setT('ai-pending-bar', state.pending);
   // Direct 출고율
   const directRate = st && st.plates.length > 0 ? Math.round(state.direct / st.plates.length * 100) : 0;
-  $('prog-direct').style.width = directRate + '%';
-  $('kpi-direct-rate').textContent = directRate + '%';
-  $('kpi-direct-rate2').textContent = directRate + '%';
-  $('ai-resolved-bar2').textContent = state.resolved;
+  setW('prog-direct', directRate + '%');
+  setT('kpi-direct-rate', directRate + '%');
+  setT('kpi-direct-rate2', directRate + '%');
   // KPI 카드
-  $('kpi-incoming').textContent = lastLoaded.toLocaleString('ko-KR');
-  $('kpi-mto').textContent = mtoRate;
-  $('kpi-high').textContent = state.riskHigh;
-  $('kpi-saved').textContent = state.savedMin;
-  $('kpi-compare').textContent = st && st.t > 0 ? 'G-Lifter ' + Math.round(st.t) + '분 · 인간 ' + state.humanMin + '분' : '—';
+  setT('kpi-incoming', lastLoaded.toLocaleString('ko-KR'));
+  setT('kpi-mto', mtoRate);
+  setT('kpi-high', state.riskHigh);
+  setT('kpi-saved', state.savedMin);
+  setT('kpi-compare', st && st.t > 0 ? 'G-Lifter ' + Math.round(st.t) + '분 · 인간 ' + state.humanMin + '분' : '—');
   // AI 브리핑 수치
-  $('ai-resolved').textContent = state.resolved;   // 지시된 셔플링 중 해소 건수 (전수 해소 없음)
-  $('ai-pending').textContent = state.pending;
-  $('ai-direct').textContent = state.direct;
-  $('ai-moves').textContent = state.moves;
+  setT('ai-resolved', state.resolved);   // 지시된 셔플링 중 해소 건수 (전수 해소 없음)
+  setT('ai-pending', state.pending);
+  setT('ai-direct', state.direct);
+  setT('ai-moves', state.moves);
 
   const analysis = await AIProvider.analyze(state);   // AI Provider 경유 (mock → 실제 API 전환 용이)
-  $('ai-diagnosis').textContent = analysis.diagnosis || '—';
-  $('ai-cell-analysis').textContent = analysis.cellAnalysis || '—';
-  $('ai-prediction').textContent = analysis.prediction || '—';
-  $('ai-recommendation').textContent = analysis.recommendation || '—';
+  setT('ai-diagnosis', analysis.diagnosis || '—');
+  setT('ai-cell-analysis', analysis.cellAnalysis || '—');
+  setT('ai-prediction', analysis.prediction || '—');
+  setT('ai-recommendation', analysis.recommendation || '—');
 }
 
 // 수동 단계 진행: 버튼 클릭 1회 = 배치 1개 처리 후 <출고 후> 갱신
@@ -918,29 +918,24 @@ function exportCSV(){
     const result = c.hadDispatch ? (c.resolved ? 'RESOLVED' : (c.pending ? 'PENDING' : 'DISPATCH_ONLY')) : '-';
     cellRows.push([c.id, beforeRiskMap[c.id]||c.risk, c.risk, beforeShuffleMap[c.id]||0, c.shuffleCount, beforeCountMap[c.id]||0, c.aliveCount, c.dispatched, c.direct, c.shuffled, result, c.hasG?'Y':'N']);
   });
-  const dl = (name: string, rows: any[][])=>{
-    const csv = rows.map(r=>r.map(v=>{ if(v===null||v===undefined) return ''; const s=String(v); return /[\",\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s; }).join(',')).join('\n');
-    const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    try{
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.style.display = 'none';
-      document.body.appendChild(a);            // 일부 브라우저는 DOM 부착 필요
-      a.click();
-      setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-    }catch(err){
-      // 다운로드 차단 환경(iframe/웹뷰 등) 폴백: 새 탭으로 CSV 열기
-      console.error('[CSV 다운로드 실패]', err);
-      window.open(url, '_blank');
-      addLog('[내보내기] 다운로드가 차단되어 새 탭으로 열었습니다: ' + name);
-    }
-  };
-  const ts = new Date().toISOString().replace(/[-:T]/g,'').slice(0,12);
-  dl('G-Lifter_이벤트로그_' + ts + '.csv', evRows);
-  dl('G-Lifter_셀해소결과_' + ts + '.csv', cellRows);
-  addLog('[내보내기] 이벤트 ' + events.length + '건 + 셀 해소 결과 ' + cells.length + '행');
+  const toCsv = (rows: any[][])=> rows.map(r=>r.map(v=>{ if(v===null||v===undefined) return ''; const s=String(v); return /[\",\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s; }).join(',')).join('\n');
+  const csv = '[셀 해소 결과]\n' + toCsv(cellRows) + '\n\n[이벤트 로그]\n' + toCsv(evRows);
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const fname = 'G-Lifter_분석결과_' + new Date().toISOString().replace(/[-:T]/g,'').slice(0,12) + '.csv';
+  // 1) 자동 다운로드 시도 (일부 환경에서는 차단될 수 있음)
+  try{
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ document.body.removeChild(a); }, 300);
+  }catch(err){ console.error('[CSV 자동 다운로드 실패]', err); }
+  // 2) 다운로드 모달 제공 — 직접 링크 클릭 + 미리보기 복사 (차단 환경 대응)
+  if($('export-link')){ $('export-link').href = url; $('export-link').setAttribute('download', fname); }
+  if($('export-preview')){ ($('export-preview') as HTMLTextAreaElement).value = csv; }
+  if($('export-modal')){ $('export-modal').classList.remove('hidden'); }
+  addLog('[내보내기] 분석 결과 CSV 생성: ' + fname + ' (' + (cellRows.length-1) + '셀 · 이벤트 ' + events.length + '건)');
 }
 
 $('upload-yard-box').addEventListener('click', ()=> $('file-yard').click());
@@ -969,13 +964,31 @@ $('file-dispatch').addEventListener('change', e=>{
 });
 // 중복 id(헤더/모달)를 모두 잡는 헬퍼
 function all$(id: string): any[] { return Array.from(document.querySelectorAll('[id="' + id + '"]')); }
+// null-safe DOM 쓰기 헬퍼 (요소 누락 시 크래시 방지)
+function setT(id: string, v: any){ const el = $(id); if(el) el.textContent = v; }
+function setW(id: string, v: string){ const el = $(id); if(el) el.style.width = v; }
+function setH(id: string, v: any){ const el = $(id); if(el) el.innerHTML = v; }
 
 $('btn-run').addEventListener('click', ()=>{ if(isRunning) stepTick(); else runDispatch(); });
 $('btn-undo').addEventListener('click', ()=>{ if(!historyStack.length){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; } undoStep(); });
 // 모달 내 중복 버튼에도 동일 핸들러 바인딩
 all$('btn-run').forEach(b=> b.addEventListener('click', ()=>{ if(isRunning) stepTick(); else runDispatch(); }));
 all$('btn-undo').forEach(b=> b.addEventListener('click', ()=>{ if(!historyStack.length){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; } undoStep(); }));
-$('btn-export').addEventListener('click', exportCSV);
+// 중복 id(상세뷰/운영성과)의 내보내기 버튼 전부에 동일 핸들러 바인딩
+all$('btn-export').forEach(b=> b.addEventListener('click', exportCSV));
+// CSV 미리보기 복사
+$('btn-copy-csv').addEventListener('click', ()=>{
+  const prev = $('export-preview') as HTMLTextAreaElement | null;
+  if(!prev || !prev.value) return;
+  try{
+    prev.select();
+    prev.setSelectionRange(0, 999999);
+    document.execCommand('copy');
+    addLog('[복사] CSV 전체를 클립보드에 복사했습니다.');
+  }catch(e){
+    navigator.clipboard.writeText(prev.value).then(()=> addLog('[복사] CSV 전체를 클립보드에 복사했습니다.')).catch(()=>{});
+  }
+});
 $('glifter-count').addEventListener('change', ()=>{
   if(isRunning){ addLog('[오류] 출고 실행 중에는 G-Lifter 대수를 변경할 수 없습니다.'); return; }
   if(!yardLoaded){ addLog('[오류] G-Lifter 대수를 변경하려면 야드를 먼저 로드하세요.'); return; }
