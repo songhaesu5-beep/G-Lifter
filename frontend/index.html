@@ -1,133 +1,396 @@
-<!DOCTYPE html>
-<html lang="ko">
+<!DOCTYPE html><html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>G-Lifter 배치 의사결정 시스템 - 출고 시뮬레이션 v23</title>
-    <link rel="stylesheet" href="css/simulation.css">
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>G-Lifter 배치 의사결정 시스템 - 출고 시뮬레이션</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "border-subtle": "#E2E8F0",
+          "on-primary": "#ffffff",
+          "surface-container-low": "#f2f3ff",
+          "on-primary-fixed": "#001b3f",
+          "inverse-on-surface": "#eff0ff",
+          "on-primary-fixed-variant": "#25467a",
+          "on-primary-container": "#7695ce",
+          "primary-container": "#002c5f",
+          "on-surface-variant": "#43474f",
+          "status-success": "#10B981",
+          "background": "#faf8ff",
+          "surface-container-high": "#e3e7ff",
+          "on-surface": "#0d1a3b",
+          "surface-tint": "#3f5e94",
+          "inverse-surface": "#242f51",
+          "secondary-container": "#2dbcfe",
+          "surface-container": "#ebedff",
+          "status-alert": "#EF4444",
+          "surface-gray": "#F8FAFC",
+          "outline-variant": "#c4c6d1",
+          "primary": "#001839",
+          "surface-variant": "#dbe1ff",
+          "surface": "#faf8ff",
+          "surface-container-lowest": "#ffffff",
+          "outline": "#747780"
+        },
+        borderRadius: { DEFAULT: "0.125rem", lg: "0.25rem", xl: "0.5rem", full: "0.75rem" },
+        spacing: { "margin-mobile": "16px", "container-max": "1440px", unit: "4px", gutter: "24px", "margin-desktop": "48px" },
+        fontFamily: { headline: ["Inter"] },
+        fontSize: {
+          "headline-md": ["24px", { lineHeight: "32px", fontWeight: "600" }],
+          "headline-lg": ["32px", { lineHeight: "40px", fontWeight: "600" }],
+          "headline-xl": ["40px", { lineHeight: "48px", fontWeight: "700" }],
+          "body-sm": ["14px", { lineHeight: "20px" }],
+          "body-md": ["16px", { lineHeight: "24px" }]
+        }
+      }
+    }
+  }
+</script>
+<style>
+  body { background-color: #f2f3ff; color: #0d1a3b; font-family: 'Inter', sans-serif; }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: #ebedff; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #c4c6d1; border-radius: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #747780; }
+</style>
+<script>
+  function showCellDetails(cellId) {
+    if(typeof window.__showCellDetails === 'function') window.__showCellDetails(cellId);
+  }
+  function hideCellDetails() {
+    if(typeof window.__hideCellDetails === 'function') window.__hideCellDetails();
+  }
+</script>
 </head>
-<body>
-
-<div class="app">
-  <div class="topbar">
-    <h1>🚢 G-Lifter 배치 의사결정 - 출고 시뮬레이션 v20</h1>
-    <span class="sub">빼고 싶은 차량(번호판) 입력 → 셀 단위 셔플링 해소 확인 → 효율적 배치 검증</span>
-    <span class="spacer"></span>
-    <span class="badge warn" id="data-badge">● 야드 미로드</span>
+<body class="min-h-screen flex flex-col text-sm">
+<!-- BEGIN: Header -->
+<header class="bg-white border-b border-border-subtle px-6 py-4 flex justify-between items-center shadow-sm">
+  <div class="flex items-center gap-4">
+    <div class="bg-primary-container text-white rounded-lg p-2 flex items-center justify-center">
+      <i class="ri-dashboard-2-fill text-xl text-white"></i>
+    </div>
+    <div>
+      <h1 class="text-xl font-bold text-on-surface">G-Lifter 배치 의사결정 시스템</h1>
+    </div>
+  </div>
+  <div class="flex items-center gap-6">
+    <button id="btn-run" class="flex items-center gap-2 px-4 py-1.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-xs font-bold transition-opacity shadow-sm border border-white/20">
+      <span class="material-symbols-outlined text-lg">play_arrow</span><span>분석 시작</span>
+    </button>
+    <button class="flex items-center gap-2 px-3 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface rounded-lg text-xs font-medium transition-colors border border-border-subtle" onclick="document.getElementById('operational-settings-modal').classList.remove('hidden')">
+      <span class="material-symbols-outlined text-lg">settings</span> 설정
+    </button>
+    <span id="data-badge" class="flex items-center gap-2 bg-green-50 text-status-success rounded-full text-xs font-medium border border-green-100">
+      <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-status-success"></span></span>
+      시스템 대기
+    </span>
+    <div class="flex items-center gap-2 text-on-surface-variant text-sm">
+      <i class="ri-time-line"></i><span id="clock">--시 --분 --초</span>
+    </div>
+    <div class="text-xs text-outline border-l border-border-subtle pl-4">v2.5.1</div>
+  </div>
+</header>
+<!-- END: Header -->
+<!-- BEGIN: Main Content -->
+<main class="flex-1 p-6 flex flex-col gap-6 overflow-x-hidden">
+  <!-- Top Row: KPI Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="bg-white rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
+      <div><p class="text-xs text-on-surface-variant font-medium mb-1">총 입고 차량</p><h4 class="text-2xl font-bold text-on-surface"><span id="kpi-incoming">0</span><span class="text-sm font-normal text-on-surface-variant ml-1">대</span></h4></div>
+      <div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary-container"><i class="ri-car-line text-xl"></i></div>
+    </div>
+    <div class="bg-white rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
+      <div><p class="text-xs text-on-surface-variant font-medium mb-1">MTO 오더 비율</p><h4 class="text-2xl font-bold text-on-surface"><span id="kpi-mto">0</span><span class="text-sm font-normal text-on-surface-variant ml-1">%</span></h4></div>
+      <div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary-container"><i class="ri-file-list-3-line text-xl"></i></div>
+    </div>
+    <div class="bg-white rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
+      <div><p class="text-xs text-on-surface-variant font-medium mb-1">고위험 셀(셔플링)</p><h4 class="text-2xl font-bold text-status-alert"><span id="kpi-high">0</span><span class="text-sm font-normal text-on-surface-variant ml-1">셀</span></h4></div>
+      <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-status-alert"><i class="ri-error-warning-line text-xl"></i></div>
+    </div>
+    <div class="bg-white rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
+      <div><p class="text-xs text-on-surface-variant font-medium mb-1">예상 절감 시간</p><h4 class="text-2xl font-bold text-on-surface"><span id="kpi-saved">0</span><span class="text-sm font-normal text-on-surface-variant ml-1">분</span></h4></div>
+      <div class="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600"><i class="ri-time-line text-xl"></i></div>
+    </div>
   </div>
 
-  <div class="body">
-    <div class="card">
-      <h3>1️⃣ 야드 데이터 + KPI 분석</h3>
-      <div class="dash-row">
-        <div class="ctrl-col">
-          <div class="upload-box" id="upload-yard-box">
-            <div class="ico">📊</div>
-            <div class="txt">야드 마스터 엑셀 업로드</div>
-            <div class="subtxt">G-Lifter_raw_data.xlsx</div>
-          </div>
-          <input type="file" id="file-yard" accept=".xlsx,.csv">
-          <div class="file-info" id="yard-info">야드 엑셀을 업로드하세요.</div>
+  <!-- Middle Row: Main Analysis -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 h-[500px]">
+    <!-- Yard Layout Heatmap -->
+    <section class="lg:col-span-2 bg-white rounded-xl border border-border-subtle shadow-sm flex flex-col h-full overflow-hidden">
+      <div class="p-4 border-b border-border-subtle flex justify-between items-center bg-white">
+        <h2 class="font-bold flex items-center gap-2 text-on-surface"><i class="ri-layout-grid-fill text-primary-container"></i> 야드 배치 현황</h2>
+        <div class="flex items-center gap-4 text-[10px] text-on-surface-variant">
+          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-status-alert"></span> 고위험</div>
+          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-yellow-400"></span> 중위험</div>
+          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-surface-container-high"></span> 정상</div>
+          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-status-success"></span> 해소</div>
+          <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full border border-primary-container bg-white shadow-sm flex items-center justify-center"><div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div></div> G-Lifter</div>
+        </div>
+      </div>
+      <div class="flex-1 overflow-auto custom-scrollbar p-6 flex flex-col items-center justify-center bg-surface-container-low/30">
+        <div class="min-w-[500px] flex flex-col gap-1.5 w-full max-w-3xl">
+          <div id="yard-grid" class="flex flex-col gap-1.5 w-full"></div>
+        </div>
+        <p class="text-xs text-on-surface-variant mt-6 italic">* 셀을 클릭하여 상세 상태를 확인하세요.</p>
+        <div class="w-full max-w-3xl mt-4">
+          <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-2">위성 매핑 (실제 항만)</h4>
+          <svg id="satellite-view" viewBox="0 0 627 528" style="width:100%;height:auto;background:#0f172a;border-radius:10px"></svg>
+        </div>
+      </div>
+    </section>
 
-          <div class="control-group" style="margin-top:2px">
-            <label>G-Lifter 대수 (최적화)</label>
-            <input type="number" id="glifter-count" min="1" max="110" value="3" style="padding:10px;border-radius:8px;border:1px solid #e2e8f0;font-size:14px;font-weight:600;background:#f8fafc;outline:none;width:100%">
-            <div class="note">대수 변경 시 G-Lifter가 위험도 최상위 셀에 재배치됩니다.</div>
+    <!-- AI Analysis Briefing -->
+    <section class="bg-primary-container text-white rounded-xl flex flex-col overflow-hidden shadow-md h-full relative">
+      <!-- Default Briefing -->
+      <div class="flex flex-col h-full absolute inset-0 bg-primary-container" id="ai-briefing-default">
+        <div class="p-4 border-b border-white/10 flex items-center gap-2">
+          <i class="ri-robot-2-line text-primary-fixed-dim"></i>
+          <h3 class="font-bold">AI 의사결정 브리핑</h3>
+          <span id="sim-progress" class="ml-auto text-[10px] text-white/60">출고 실행 대기 중</span>
+        </div>
+        <div class="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5 text-sm">
+          <div class="space-y-1.5">
+            <span class="text-xs text-white/60 font-semibold uppercase tracking-wider">진단 (Diagnosis)</span>
+            <p id="ai-diagnosis" class="text-white/90 leading-relaxed">야드 엑셀을 업로드하면 AI 분석이 표시됩니다.</p>
           </div>
-
-          <div style="border-top:1px dashed #cbd5e1"></div>
-
-          <div class="upload-box" id="upload-dispatch-box">
-            <div class="ico">📋</div>
-            <div class="txt">번호판 CSV 업로드 (대량 가능)</div>
-            <div class="subtxt">plate_no 컬럼 또는 한 줄에 번호판 1개 · 최대 5,000개</div>
+          <div class="space-y-1.5">
+            <span class="text-xs text-white/60 font-semibold uppercase tracking-wider">원인 (Cause)</span>
+            <p id="ai-cell-analysis" class="text-white/90 leading-relaxed">—</p>
           </div>
-          <input type="file" id="file-dispatch" accept=".csv,.txt">
-          <textarea id="plate-input" placeholder="78허 0724&#10;24머 3116&#10;05부 7036&#10;..."></textarea>
-          <div class="control-group">
-            <label>시뮬레이션 속도 (단계별 표시)</label>
-            <select id="sim-speed">
+          <div class="space-y-1.5">
+            <span class="text-xs text-white/60 font-semibold uppercase tracking-wider">예측 (Prediction)</span>
+            <p id="ai-prediction" class="text-white/90 leading-relaxed">—</p>
+          </div>
+          <div class="bg-white/10 p-4 rounded-lg border border-white/5 mt-auto">
+            <span class="text-xs text-primary-fixed-dim font-semibold flex items-center gap-1.5 mb-2"><i class="ri-lightbulb-flash-line text-lg"></i> 추천 (Recommendation)</span>
+            <p id="ai-recommendation" class="text-white/80 text-sm leading-relaxed">—</p>
+          </div>
+          <p id="verdict-text" class="text-xs text-white/70 leading-relaxed"></p>
+        </div>
+        <div class="p-3 bg-black/20 border-t border-white/10 flex justify-between items-center text-xs">
+          <span class="text-white/60">해소 <span id="ai-resolved" class="text-status-success font-bold">0</span>건 · 잔여 <span id="ai-pending" class="font-bold">0</span>건</span>
+          <span class="text-white/50">Direct <span id="ai-direct" class="font-bold">0</span>대 · 이동 <span id="ai-moves" class="font-bold">0</span>회</span>
+          <span class="text-white/50"><i class="ri-cpu-line"></i> G-Logic v2.4</span>
+        </div>
+      </div>
+      <!-- Detailed Cell Analysis (Hidden by default) -->
+      <div class="flex flex-col h-full absolute inset-0 bg-primary-container hidden" id="ai-briefing-detail">
+        <div class="p-4 border-b border-white/10 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="ri-search-eye-line text-status-alert"></i>
+            <h3 class="font-bold">셀 상세 분석: <span class="text-primary-fixed-dim font-mono" id="detail-cell-id">—</span></h3>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-export" class="flex items-center gap-2 px-3 py-2 bg-primary-container hover:opacity-90 text-white rounded-lg text-xs font-bold transition-opacity shadow-md border border-white/10"><span class="material-symbols-outlined text-lg">download</span> 결과 다운로드</button>
+            <button class="text-white/80 hover:text-white" onclick="hideCellDetails()"><span class="material-symbols-outlined">arrow_back</span></button>
+          </div>
+        </div>
+        <div class="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5 text-sm">
+          <div class="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-3">
+            <i class="ri-error-warning-fill text-status-alert mt-0.5"></i>
+            <div>
+              <h4 class="text-status-alert font-medium mb-1" id="detail-depth">—</h4>
+              <p id="detail-msg" class="text-white/80 text-xs">—</p>
+            </div>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <span class="text-xs text-white/60 font-semibold mb-1 block">차량 구성</span>
+              <div class="flex justify-between items-center text-sm border-b border-white/10 pb-2"><span class="text-white/80">MTO (주문 생산)</span><span class="font-medium text-white" id="detail-mto">0대</span></div>
+              <div class="flex justify-between items-center text-sm border-b border-white/10 py-2"><span class="text-white/80">MTS (재고 생산)</span><span class="font-medium text-white" id="detail-mts">0대</span></div>
+              <div class="flex justify-between items-center text-sm border-b border-white/10 py-2"><span class="text-white/80">셔플링 (blocking)</span><span class="font-medium text-status-alert" id="detail-shuffle">0대</span></div>
+              <div class="flex justify-between items-center text-sm py-2"><span class="text-white/80">G-Lifter 배치</span><span class="font-medium text-status-success" id="detail-glifter">—</span></div>
+            </div>
+            <div>
+              <span class="text-xs text-white/60 font-semibold mb-1 block">해결 방안</span>
+              <p id="detail-plan" class="text-white/90 text-sm leading-relaxed">—</p>
+            </div>
+          </div>
+          <div id="cell-result-log" class="bg-white/10 rounded-lg p-3 text-xs text-white/70 overflow-y-auto custom-scrollbar max-h-32">셀별 해소 결과: 출고 실행 후 표시됩니다.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Bottom Section: Heatmaps -->
+  <section class="bg-white rounded-xl border border-border-subtle shadow-sm p-4 flex flex-col gap-4">
+    <div class="flex justify-between items-center border-b border-border-subtle pb-3">
+      <h3 class="font-bold text-on-surface flex items-center gap-2"><i class="ri-map-2-line text-primary-container"></i> 야드 셔플링 위험도 변화</h3>
+      <div class="flex items-center gap-4 text-[10px] text-on-surface-variant">
+        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-status-alert"></span> 고위험 (셔플링)</div>
+        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-yellow-400"></span> 중위험 (관찰)</div>
+        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-surface-container-high"></span> 정상</div>
+        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-status-success"></span> 해소/정상</div>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
+      <div class="flex flex-col items-center">
+        <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-6">BEFORE DISPATCH (RISK ASSESSMENT)</h4>
+        <div class="w-full overflow-x-auto custom-scrollbar"><div id="grid-before" class="min-w-[320px] flex flex-col gap-1"></div></div>
+      </div>
+      <div class="flex flex-col items-center">
+        <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-6">AFTER DISPATCH (RESOLUTION STATUS)</h4>
+        <div class="w-full overflow-x-auto custom-scrollbar"><div id="grid-after" class="min-w-[320px] flex flex-col gap-1"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Operational Performance Dashboard -->
+  <section class="bg-white rounded-xl border border-border-subtle shadow-sm flex flex-col overflow-hidden">
+    <div class="p-4 border-b border-border-subtle bg-white flex justify-between items-center">
+      <h3 class="font-bold text-on-surface flex items-center gap-2"><i class="ri-dashboard-3-line text-primary-container"></i> 운영 성과 대시보드</h3>
+      <div class="flex gap-4 items-center">
+        <div class="flex items-center gap-2"><span class="text-xs text-on-surface-variant">셔플링 해소 완료</span><span class="bg-primary-container text-white px-2 py-0.5 rounded-full text-xs font-bold"><span id="ai-resolved-bar">0</span>건</span></div>
+        <div class="flex items-center gap-2"><span class="text-xs text-on-surface-variant">Direct 출고율</span><span id="kpi-direct-rate" class="text-xs font-bold text-status-success">0%</span></div>
+        <button id="btn-export" class="flex items-center gap-2 px-5 py-2.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-sm font-bold transition-opacity shadow-md ml-4 border border-white/10"><span class="material-symbols-outlined text-lg">download</span> 결과 다운로드</button>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border-subtle">
+      <div class="p-6 flex flex-col justify-center gap-6">
+        <div>
+          <div class="flex justify-between items-end mb-2"><span class="text-sm font-semibold text-on-surface">Direct 출고율 개선</span><span class="text-xl font-bold text-primary-container" id="kpi-direct-rate2">0%</span></div>
+          <div class="bg-surface-container-high rounded-full h-2.5 w-full"><div id="prog-direct" class="bg-primary-container h-2.5 rounded-full" style="width:0%"></div></div>
+          <p class="text-xs text-on-surface-variant mt-2 text-right">목표: 100%</p>
+        </div>
+        <div>
+          <div class="flex justify-between items-end mb-2"><span class="text-sm font-semibold text-on-surface">셔플링 해소 진척도</span><span class="text-xl font-bold text-primary-container"><span id="ai-resolved-bar2">0</span>/<span id="ai-shuffle-total">0</span>건</span></div>
+          <div class="bg-surface-container-high rounded-full h-2.5 w-full"><div id="ai-progress" class="bg-status-success h-2.5 rounded-full" style="width:0%"></div></div>
+          <p class="text-xs text-on-surface-variant mt-2 text-right">해소율 <span id="ai-progress-label">0%</span> · 잔여: <span id="ai-pending-bar">0</span>건</p>
+        </div>
+        <div class="flex items-center justify-between text-xs text-on-surface-variant"><span>G-Lifter vs 인간 시간 비교</span><span class="font-bold text-on-surface" id="kpi-compare">—</span></div>
+      </div>
+      <div class="p-6 flex flex-col gap-3">
+        <div id="gl-board" class="bg-surface-gray rounded-lg p-3 text-xs text-on-surface-variant">G-Lifter 이동 현황: 출고 실행 후 표시됩니다.</div>
+        <div id="log" class="bg-[#0f172a] text-[#10b981] rounded-lg p-3 font-mono text-[11px] leading-relaxed overflow-y-auto custom-scrollbar h-32">&gt; 야드 엑셀을 먼저 업로드하세요.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- G-Lifter Timeline -->
+  <section class="bg-white rounded-xl border border-border-subtle shadow-sm flex flex-col overflow-hidden">
+    <div class="px-4 py-3 border-b border-border-subtle bg-surface-container-low/30 flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary-container text-lg">history</span>
+      <h4 class="text-sm font-bold text-on-surface">G-Lifter 타임라인</h4>
+      <button id="btn-undo" class="ml-auto flex items-center gap-2 px-3 py-1.5 bg-amber-500 hover:opacity-90 text-white rounded-lg text-xs font-bold transition-opacity" disabled><span class="material-symbols-outlined text-sm">undo</span> 출고 되돌리기</button>
+    </div>
+    <div class="overflow-y-auto custom-scrollbar h-64">
+      <table class="w-full text-left text-sm whitespace-nowrap">
+        <thead class="bg-surface-container-low border-b border-border-subtle text-on-surface-variant sticky top-0">
+          <tr><th class="px-4 py-2 font-medium">시간</th><th class="px-4 py-2 font-medium">기기</th><th class="px-4 py-2 font-medium">작업 구분</th><th class="px-4 py-2 font-medium">출발</th><th class="px-4 py-2 font-medium">도착</th><th class="px-4 py-2 font-medium">상태</th></tr>
+        </thead>
+        <tbody id="gl-timeline" class="divide-y divide-border-subtle text-on-surface"><tr><td colspan="6" class="px-4 py-3 text-center text-xs text-on-surface-variant">출고 실행 후 표시됩니다</td></tr></tbody>
+      </table>
+    </div>
+    <div class="p-3 bg-white border-t border-border-subtle flex justify-between items-center text-xs text-on-surface-variant">
+      <span>총 <span id="gl-timeline-count">0</span>건의 이동 기록</span>
+      <button class="text-primary-container hover:underline font-medium" onclick="document.getElementById('timeline-modal').classList.remove('hidden')">자세히 보기</button>
+    </div>
+  </section>
+</main>
+<!-- END: Main Content -->
+
+<!-- Export Modal -->
+<div id="export-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden">
+  <div class="bg-white w-full max-w-2xl rounded-xl shadow-xl border border-border-subtle overflow-hidden flex flex-col max-h-[85vh]">
+    <div class="p-4 border-b border-border-subtle flex justify-between items-center bg-primary-container text-white">
+      <h3 class="font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span> 분석 결과 다운로드</h3>
+      <button class="text-white/80 hover:text-white" onclick="document.getElementById('export-modal').classList.add('hidden')"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="p-5 space-y-4 overflow-y-auto custom-scrollbar">
+      <a id="export-link" href="#" download="G-Lifter_분석결과.csv" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-sm font-bold transition-opacity shadow-md">
+        <span class="material-symbols-outlined text-lg">download</span> CSV 파일 다운로드
+      </a>
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">CSV 미리보기</span>
+          <button id="btn-copy-csv" class="text-xs text-primary-container hover:underline font-medium">전체 복사</button>
+        </div>
+        <textarea id="export-preview" readonly rows="12" class="w-full border border-border-subtle rounded-lg p-3 text-[11px] font-mono bg-surface-gray focus:outline-none"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden" id="operational-settings-modal">
+  <div class="bg-white w-[460px] rounded-xl shadow-xl border border-border-subtle overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="p-4 border-b border-border-subtle flex justify-between items-center bg-surface-container-low">
+      <h3 class="font-bold text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-primary-container">settings</span> 데이터 소스 업로드 및 제어</h3>
+      <button class="text-on-surface-variant hover:text-on-surface" onclick="document.getElementById('operational-settings-modal').classList.add('hidden')"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+      <div class="space-y-3">
+        <h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">데이터 소스</h4>
+        <div class="grid gap-3">
+          <div id="upload-yard-box" class="border-2 border-dashed border-outline-variant rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-low cursor-pointer transition-colors">
+            <span class="material-symbols-outlined text-3xl text-outline">upload_file</span>
+            <div class="text-center"><p class="text-sm font-semibold text-on-surface">야드 마스터 엑셀 업로드</p><p id="yard-info" class="text-[10px] text-on-surface-variant">야드 엑셀을 업로드하세요</p></div>
+          </div>
+          <input type="file" id="file-yard" accept=".xlsx,.csv" class="hidden">
+          <div id="upload-dispatch-box" class="border-2 border-dashed border-outline-variant rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-low cursor-pointer transition-colors">
+            <span class="material-symbols-outlined text-3xl text-outline">description</span>
+            <div class="text-center"><p class="text-sm font-semibold text-on-surface">번호판 CSV 업로드</p><p class="text-[10px] text-on-surface-variant">plate_no 컬럼 또는 한 줄 1개 · 최대 5,000개</p></div>
+          </div>
+          <input type="file" id="file-dispatch" accept=".csv,.txt" class="hidden">
+        </div>
+      </div>
+      <div class="space-y-4">
+        <h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">출고 대상 (번호판)</h4>
+        <textarea id="plate-input" rows="4" placeholder="78허 0724&#10;24머 3116&#10;05부 7036&#10;..." class="w-full border border-border-subtle rounded-lg p-3 text-xs font-mono bg-surface-gray focus:outline-none focus:ring-2 focus:ring-primary-container"></textarea>
+      </div>
+      <div class="space-y-4">
+        <h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">시뮬레이션 파라미터</h4>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-on-surface-variant mb-1">G-Lifter 대수</label>
+            <input type="number" id="glifter-count" min="1" max="110" value="3" class="w-full border border-border-subtle rounded-lg px-3 py-2 text-sm font-semibold bg-surface-gray focus:outline-none focus:ring-2 focus:ring-primary-container">
+          </div>
+          <div>
+            <label class="block text-xs text-on-surface-variant mb-1">단계당 처리 대수</label>
+            <select id="sim-speed" class="w-full border border-border-subtle rounded-lg px-3 py-2 text-sm font-semibold bg-surface-gray focus:outline-none focus:ring-2 focus:ring-primary-container">
               <option value="200" selected>최소 (200대/단계)</option>
               <option value="500">보통 (500대/단계)</option>
               <option value="1000">빠르게 (1000대/단계)</option>
-              <option value="5000">최고속 (일괄)</option>
+              <option value="5000">일괄</option>
             </select>
-            <div class="note" id="sim-progress">출고 실행 대기 중</div>
           </div>
-          <button class="btn btn-primary" id="btn-run">▶️ 출고 실행 (단계별 셔플링 해소 확인)</button>
-          <button class="btn btn-undo" id="btn-undo" disabled>↩️ 출고 되돌리기</button>
-          <button class="btn btn-export" id="btn-export">⬇️ 산출물 CSV</button>
-          <button class="btn btn-reset" id="btn-reset">🔄 초기화</button>
         </div>
-
-        <div class="analysis-col">
-          <div class="ai-panel">
-            <div class="ai-title">🤖 AI 출고 상황 분석</div>
-            <div class="ai-stats">
-              <div>
-                <div class="ai-progress-wrap"><div class="ai-progress-bar" id="ai-progress"></div></div>
-                <div class="ai-progress-label" id="ai-progress-label">대기 중</div>
-              </div>
-              <div class="ai-chips">
-                <span class="chip chip-green">✅ 해소 <b id="ai-resolved">0</b>건</span>
-                <span class="chip chip-red">🚧 잔존 <b id="ai-pending">0</b>건</span>
-                <span class="chip chip-blue">🚗 Direct <b id="ai-direct">0</b>대</span>
-                <span class="chip chip-orange">🚚 이동 <b id="ai-moves">0</b>회</span>
-              </div>
-            </div>
-            <div class="ai-body" id="ai-text">
-              <div class="ai-sec"><span class="ai-tag diag">진단</span><span id="ai-diagnosis">—</span></div>
-              <div class="ai-sec"><span class="ai-tag cell">셀 분석</span><span id="ai-cell-analysis">—</span></div>
-              <div class="ai-sec"><span class="ai-tag pred">리포트</span><span id="ai-prediction">—</span></div>
-              <div class="ai-sec"><span class="ai-tag rec">추천</span><span id="ai-recommendation">—</span></div>
-            </div>
-          </div>
-
-          <div class="verdict" id="verdict">
-            <div class="v-title">G-Lifter 효율적 배치 검증</div>
-            <div class="v-sub" id="verdict-text">출고 실행 후, 셔플링이 해소된 셀 비율로 배치 효율을 판단합니다.</div>
-          </div>
-
-          <div class="result-log" id="gl-board"><b>🚚 G-Lifter 이동 현황:</b> 출고 실행 후 표시됩니다.</div>
-
-          <div class="result-log" id="cell-result-log"><b>셀별 해소 결과:</b> 출고 실행 후 표시됩니다.</div>
-          <div class="note">※ R1 셔플링 = shuffle_yn=Y 차량(행3 30%) · R2 Direct = 즉시 출고(1분) · R3 G-Lifter가 지시된 셔플링 차량만 1대씩 해소(이동·인양 포함 5분/건) <span class="resolved">✅ 해소</span> · 지시는 업로드 순서대로 분산 처리 → 클릭 단위 점진 해소 · 미지시 셔플링은 야드에 잔존 · G-Lifter vs 인간 시간 비교 제공</div>
+        <div class="flex gap-2">
+          <button id="btn-run" class="flex-1 bg-primary-container hover:opacity-90 text-white rounded-lg py-2.5 text-sm font-bold transition-opacity">분석 시작 (단계 진행)</button>
+          <button id="btn-undo" class="flex-1 bg-amber-500 hover:opacity-90 text-white rounded-lg py-2.5 text-sm font-bold transition-opacity" disabled>출고 되돌리기</button>
         </div>
+        <button id="btn-reset" class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface rounded-lg py-2 text-sm font-medium transition-colors border border-border-subtle">초기화</button>
       </div>
     </div>
+  </div>
+</div>
 
-    <div class="card">
-      <h3>🗺️ 전/후 히트맵 비교 <small>✅ 해소 셀 · 🚧 잔존 셀 표시</small></h3>
-      <div class="hm-grid">
-        <div class="hm-card">
-          <div class="hm-title before">【출고 전】</div>
-          <div class="hm-wrap"><svg id="heatmap-before" viewBox="0 0 960 340" xmlns="http://www.w3.org/2000/svg"></svg></div>
-        </div>
-        <div class="hm-card">
-          <div class="hm-title after">【출고 후】</div>
-          <div class="hm-wrap"><svg id="heatmap-after" viewBox="0 0 960 340" xmlns="http://www.w3.org/2000/svg"></svg></div>
-        </div>
-      </div>
-      <div class="legend">
-        <span><i style="background:#fca5a5"></i>고위험</span>
-        <span><i style="background:#fdba74"></i>중위험</span>
-        <span><i style="background:#fde68a"></i>정상</span>
-        <span><i style="background:#f59e0b;border-radius:50%"></i>G-Lifter</span>
-        <span><i style="background:#16a34a;border-radius:50%"></i>✅ 해소</span>
-        <span><i style="background:#dc2626;border-radius:50%"></i>🚧 잔존</span>
-        <span style="margin-left:auto">G-Lifter 해소 셀 = 파란 테두리 (출고 후)</span>
-      </div>
-      <div class="result-log" id="gl-timeline"><b>⏱️ G-Lifter 이동 타임라인:</b> 출고 실행 후 표시됩니다.</div>
-
-      <h3 style="margin-top:14px">🛰️ 위성 매핑 (대표 셀 3개 — 실제 항만 시각화)</h3>
-      <svg id="satellite-view" viewBox="0 0 627 528" style="width:100%;height:auto;background:#0f172a;border-radius:10px"></svg>
-
-      <div class="log" id="log">&gt; 야드 엑셀을 먼저 업로드하세요.</div>
+<!-- Timeline Modal -->
+<div id="timeline-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden">
+  <div class="bg-white w-full max-w-3xl rounded-xl shadow-xl border border-border-subtle overflow-hidden flex flex-col">
+    <div class="p-4 border-b border-border-subtle flex justify-between items-center bg-primary-container text-white">
+      <h3 class="font-bold flex items-center gap-2"><span class="material-symbols-outlined">history</span> G-Lifter 전체 운영 타임라인</h3>
+      <button class="text-white/80 hover:text-white" onclick="document.getElementById('timeline-modal').classList.add('hidden')"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="overflow-y-auto max-h-[70vh] custom-scrollbar">
+      <table class="w-full text-left text-sm whitespace-nowrap">
+        <thead class="bg-surface-container-low border-b border-border-subtle text-on-surface-variant sticky top-0">
+          <tr><th class="px-6 py-3 font-medium">시간</th><th class="px-6 py-3 font-medium">기기</th><th class="px-6 py-3 font-medium">작업 구분</th><th class="px-6 py-3 font-medium">출발</th><th class="px-6 py-3 font-medium">도착</th><th class="px-6 py-3 font-medium">상태</th></tr>
+        </thead>
+        <tbody id="gl-timeline-full" class="divide-y divide-border-subtle text-on-surface"></tbody>
+      </table>
     </div>
   </div>
 </div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script type="module" src="/src/main.ts"></script>
-
+</body>
 </html>

@@ -256,22 +256,19 @@ function renderGlifterBoard(){
 }
 
 function renderTimeline(){
-  const el = $('gl-timeline');
   const evs = timeline.filter(ev=> ev.type === 'MOVE' || (ev.type === 'SHUFFLE' && ev.result === 'RESOLVED'));
-  if(!evs.length){
-    el.innerHTML = '<b>⏱️ G-Lifter 이동 타임라인:</b> 출고 실행 후 표시됩니다.';
-    return;
-  }
-  const lines = evs.slice(-100).map(ev=>{
-    if(ev.type === 'MOVE'){
-      return '<div><b>' + Math.round(ev.min) + '분</b> ' + ev.gl + ' 이동: <b>' + ev.from + '</b> → <b>' + ev.to + '</b></div>';
-    }
-    return '<div>✅ <b>' + Math.round(ev.min) + '분</b> ' + ev.gl + ' · <b>' + ev.cell + '</b> 셔플링 해소</div>';
-  }).join('');
-  el.innerHTML = '<b>⏱️ G-Lifter 이동 타임라인 (' + evs.length + '건):</b><br/>' + lines;
+  const row = (ev: any)=> ev.type === 'MOVE'
+    ? '<tr class="hover:bg-surface-container-low transition-colors"><td class="px-4 py-2 text-xs text-on-surface-variant">' + Math.round(ev.min) + '분</td><td class="px-4 py-2"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">' + ev.gl + '</span></td><td class="px-4 py-2">셔플링 이동</td><td class="px-4 py-2 font-mono text-xs">' + ev.from + '</td><td class="px-4 py-2 font-mono text-xs">' + ev.to + '</td><td class="px-4 py-2"><span class="text-status-success font-medium"><i class="ri-checkbox-circle-line"></i> 완료</span></td></tr>'
+    : '<tr class="hover:bg-surface-container-low transition-colors"><td class="px-4 py-2 text-xs text-on-surface-variant">' + Math.round(ev.min) + '분</td><td class="px-4 py-2"><span class="bg-surface-variant text-primary-container px-2 py-0.5 rounded text-xs font-medium">' + ev.gl + '</span></td><td class="px-4 py-2">셔플링 해소</td><td class="px-4 py-2 font-mono text-xs">' + ev.cell + '</td><td class="px-4 py-2 font-mono text-xs">-</td><td class="px-4 py-2"><span class="text-status-success font-medium"><i class="ri-checkbox-circle-line"></i> 해소</span></td></tr>';
+  const recent = evs.slice(-50).map(row).join('');
+  const all = evs.map(row).join('');
+  $('gl-timeline').innerHTML = recent || '<tr><td colspan="6" class="px-4 py-3 text-center text-xs text-on-surface-variant">출고 실행 후 표시됩니다</td></tr>';
+  $('gl-timeline-full').innerHTML = all || '<tr><td colspan="6" class="px-6 py-3 text-center text-xs text-on-surface-variant">이동 기록이 없습니다</td></tr>';
+  $('gl-timeline-count').textContent = evs.length;
 }
 
 let beforeRiskMap = {}, beforeShuffleMap = {}, beforeBlockCountMap = {}, beforeCountMap = {};
+let lastLoaded = 0, mtoRate = 0;
 
 function loadYardFile(file){
   const reader = new FileReader();
@@ -288,9 +285,16 @@ function loadYardFile(file){
         beforeRiskMap[c.id]=c.risk; beforeShuffleMap[c.id]=c.shuffleCount;
         beforeBlockCountMap[c.id]=c.blockers; beforeCountMap[c.id]=c.aliveCount;
       });
-      $('data-badge').textContent = '● 야드 ' + loaded.toLocaleString() + '대 로드';
-      $('data-badge').className = 'badge';
+      lastLoaded = loaded;
+      const allCars = cells.flatMap((c:any)=> c.bundles.flat());
+      const mtoCnt = allCars.filter((c:any)=> c.mto==='MTO').length;
+      mtoRate = Math.round(mtoCnt / Math.max(1, allCars.length) * 1000) / 10;
+      $('data-badge').textContent = '야드 ' + loaded.toLocaleString() + '대 로드';
+      $('data-badge').className = 'flex items-center gap-2 bg-green-50 text-status-success rounded-full text-xs font-medium border border-green-100 px-3 py-1.5';
       $('yard-info').innerHTML = '<b>' + file.name + '</b><br/>차량 ' + loaded.toLocaleString() + '대 로드 완료';
+      $('kpi-incoming').textContent = loaded.toLocaleString('ko-KR');
+      $('kpi-mto').textContent = mtoRate;
+      $('kpi-high').textContent = cells.filter(c=>c.risk==='HIGH').length;
       resetOutputs();
       drawHeatmaps();
       addLog('[야드] ' + file.name + ' 로드 · 차량 ' + loaded.toLocaleString() + '대 · 고위험 셀 ' + cells.filter(c=>c.risk==='HIGH').length + '개');
@@ -306,21 +310,32 @@ function loadYardFile(file){
 function resetOutputs(){
   resetSatelliteCache();   // 위성 뷰 캐시 리셋
   historyStack = [];
-  $('btn-undo').disabled = true;
-  $('ai-progress').style.width = '0%';
-  $('ai-progress-label').textContent = '대기 중';
-  $('ai-resolved').textContent = 0;
-  $('ai-pending').textContent = 0;
-  $('ai-direct').textContent = 0;
-  $('ai-moves').textContent = 0;
-  $('ai-diagnosis').textContent = '—';
-  $('ai-cell-analysis').textContent = '—';
-  $('ai-prediction').textContent = '—';
-  $('ai-recommendation').textContent = '—';
-  $('verdict-text').textContent = '출고 실행 후, 셔플링이 해소된 셀 비율로 배치 효율을 판단합니다.';
-  $('cell-result-log').innerHTML = '<b>셀별 해소 결과:</b> 출고 실행 후 표시됩니다.';
-  $('gl-board').innerHTML = '<b>🚚 G-Lifter 이동 현황:</b> 출고 실행 후 표시됩니다.';
-  $('gl-timeline').innerHTML = '<b>⏱️ G-Lifter 이동 타임라인:</b> 출고 실행 후 표시됩니다.';
+  all$('btn-undo').forEach((b: any)=> b.disabled = true);
+  setW('ai-progress', '0%');
+  setT('ai-progress-label', '0%');
+  setT('ai-resolved', 0);
+  setT('ai-pending', 0);
+  setT('ai-direct', 0);
+  setT('ai-moves', 0);
+  setT('ai-resolved-bar', 0);
+  setT('ai-resolved-bar2', 0);
+  setT('ai-shuffle-total', 0);
+  setT('ai-pending-bar', 0);
+  setW('prog-direct', '0%');
+  setT('kpi-direct-rate', '0%');
+  setT('kpi-direct-rate2', '0%');
+  setT('kpi-saved', 0);
+  setT('kpi-compare', '—');
+  setT('ai-diagnosis', '—');
+  setT('ai-cell-analysis', '—');
+  setT('ai-prediction', '—');
+  setT('ai-recommendation', '—');
+  setT('verdict-text', '');
+  setH('cell-result-log', '셀별 해소 결과: 출고 실행 후 표시됩니다.');
+  setH('gl-board', 'G-Lifter 이동 현황: 출고 실행 후 표시됩니다.');
+  setH('gl-timeline', '<tr><td colspan="6" class="px-4 py-3 text-center text-xs text-on-surface-variant">출고 실행 후 표시됩니다</td></tr>');
+  setH('gl-timeline-full', '');
+  setT('gl-timeline-count', 0);
 }
 
 let isRunning = false;
@@ -343,13 +358,13 @@ function saveSnapshot(){
     st: stepState ? {...stepState, unmatchedList:[...stepState.unmatchedList]} : null
   });
   if(historyStack.length > 60) historyStack.shift();
-  $('btn-undo').disabled = historyStack.length === 0;
+  all$('btn-undo').forEach((b: any)=> b.disabled = historyStack.length === 0);
 }
 
 // 이전 단계로 되돌리기 (출고 되돌리기)
 function undoStep(){
   const snap = historyStack.pop();
-  $('btn-undo').disabled = historyStack.length === 0;
+  all$('btn-undo').forEach((b: any)=> b.disabled = historyStack.length === 0);
   if(!snap){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; }
   const cars = cells.flatMap((c: any)=> c.bundles.flat());
   cars.forEach((car: any, i: number)=>{ car.removed = snap.removed[i]; });
@@ -372,10 +387,10 @@ function undoStep(){
 
 function setRunning(run){
   isRunning = run;
-  ['btn-export','btn-reset'].forEach(id=>{
-    $(id).disabled = run;
-  });
-  $('btn-run').textContent = run ? '⏭️ 다음 단계 진행' : '▶️ 출고 실행 (단계별 셔플링 해소 확인)';
+  all$('btn-export').forEach((b: any)=> b.disabled = run);
+  all$('btn-reset').forEach((b: any)=> b.disabled = run);
+  const label = run ? '⏭️ 분석 진행' : (simDone ? '✅ 분석 완료' : '분석 시작');
+  all$('btn-run').forEach((b: any)=> b.textContent = label);
 }
 
 function runDispatch(){
@@ -409,7 +424,7 @@ function runDispatch(){
   stepState = {plates: orderedPlates, idx:0, seq:0, t:0, matched:0, unmatched:0, unmatchedList:[], dispatchShuffle, dispatchedResolved: 0};
 
   setRunning(true);
-  drawHeatmap('heatmap-before','before');
+  drawHeatmaps();
   $('sim-progress').textContent = '출고 실행 중... 0/' + plates.length + '대 · 경과 0분';
   addLog('[출고 실행] 단계별 시뮬레이션 시작: ' + plates.length + '대 지시 · 버튼 클릭마다 1단계 진행');
   stepTick();
@@ -456,21 +471,35 @@ function collectAIState(){
 async function updateAI(){
   const state = collectAIState();
   const st = stepState;
-  const pct = st && st.plates.length > 0 ? Math.round(st.idx / st.plates.length * 100) : 0;
-  $('ai-progress').style.width = pct + '%';
-  $('ai-progress-label').textContent = st
-    ? st.idx + '/' + st.plates.length + '대 · 경과 ' + Math.round(st.t) + '분 · 해소율 ' + state.rate + '%'
-    : '대기 중';
-  $('ai-resolved').textContent = state.resolved;   // 지시된 셔플링 중 해소 건수 (전수 해소 없음)
-  $('ai-pending').textContent = state.pending;
-  $('ai-direct').textContent = state.direct;
-  $('ai-moves').textContent = state.moves;
+  // 해소 진척도 (진행 바 + 라벨)
+  setW('ai-progress', state.rate + '%');
+  setT('ai-progress-label', state.rate + '%');
+  setT('ai-resolved-bar', state.resolved);
+  setT('ai-resolved-bar2', state.resolved);
+  setT('ai-shuffle-total', state.shuffleTotal);
+  setT('ai-pending-bar', state.pending);
+  // Direct 출고율
+  const directRate = st && st.plates.length > 0 ? Math.round(state.direct / st.plates.length * 100) : 0;
+  setW('prog-direct', directRate + '%');
+  setT('kpi-direct-rate', directRate + '%');
+  setT('kpi-direct-rate2', directRate + '%');
+  // KPI 카드
+  setT('kpi-incoming', lastLoaded.toLocaleString('ko-KR'));
+  setT('kpi-mto', mtoRate);
+  setT('kpi-high', state.riskHigh);
+  setT('kpi-saved', state.savedMin);
+  setT('kpi-compare', st && st.t > 0 ? 'G-Lifter ' + Math.round(st.t) + '분 · 인간 ' + state.humanMin + '분' : '—');
+  // AI 브리핑 수치
+  setT('ai-resolved', state.resolved);   // 지시된 셔플링 중 해소 건수 (전수 해소 없음)
+  setT('ai-pending', state.pending);
+  setT('ai-direct', state.direct);
+  setT('ai-moves', state.moves);
 
   const analysis = await AIProvider.analyze(state);   // AI Provider 경유 (mock → 실제 API 전환 용이)
-  $('ai-diagnosis').textContent = analysis.diagnosis || '—';
-  $('ai-cell-analysis').textContent = analysis.cellAnalysis || '—';
-  $('ai-prediction').textContent = analysis.prediction || '—';
-  $('ai-recommendation').textContent = analysis.recommendation || '—';
+  setT('ai-diagnosis', analysis.diagnosis || '—');
+  setT('ai-cell-analysis', analysis.cellAnalysis || '—');
+  setT('ai-prediction', analysis.prediction || '—');
+  setT('ai-recommendation', analysis.recommendation || '—');
 }
 
 // 수동 단계 진행: 버튼 클릭 1회 = 배치 1개 처리 후 <출고 후> 갱신
@@ -523,8 +552,7 @@ function stepTick(){
 
   cells.forEach(c=> c.updateStats());
   updateAI();                                         // 단계 진행 시 AI 설명도 함께 갱신
-  drawHeatmap('heatmap-after','after');               // 클릭 단계마다 <출고 후> 갱신
-  if(selectedCellId && cells.some(c=>c.id===selectedCellId)) renderBundleViewer(selectedCellId, 'after');
+  drawHeatmaps();
   renderTimeline();
   renderGlifterBoard();
   if(st.dispatchedResolved >= st.dispatchShuffle && st.dispatchShuffle > 0){
@@ -803,11 +831,80 @@ function drawHeatmap(svgId, mode){
   }
 }
 
+// code.html 스타일 div 그리드 히트맵 렌더러
+function cellColor(risk: string): string{
+  return risk === 'HIGH' ? 'bg-status-alert' : (risk === 'MID' ? 'bg-yellow-400' : 'bg-surface-container-high');
+}
+
+// 야드 배치 현황 (A~V × D1~D5, 셀 클릭 → 셀 상세 분석)
+function renderYardGrid(){
+  const g = $('yard-grid');
+  if(!g) return;
+  let html = '<div class="flex gap-1.5 pl-8">' + ZONES.map(z=> '<div class="flex-1 text-[10px] text-center text-outline font-bold">' + z + '</div>').join('') + '</div>';
+  DEPTHS.forEach(d=>{
+    html += '<div class="flex gap-1.5 items-center"><span class="w-6 text-[10px] font-bold text-outline text-right pr-2">D' + d + '</span>';
+    ZONES.forEach(z=>{
+      const cell = cells.find(c=> c.id === z + d);
+      const color = cell ? cellColor(cell.risk) : 'bg-surface-container-high';
+      const ring = cell && cell.risk === 'HIGH' ? ' shadow-sm ring-1 ring-status-alert' : '';
+      const dot = cell && cell.hasG
+        ? '<div class="absolute inset-0 flex items-center justify-center"><div class="w-3 h-3 rounded-full border-2 border-primary-container bg-white shadow-sm flex items-center justify-center"><div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div></div></div>'
+        : '';
+      html += '<div class="flex-1 h-8 ' + color + ring + ' rounded cursor-pointer hover:opacity-80 transition-opacity relative" onclick="showCellDetails(\'' + z + d + '\')">' + dot + '</div>';
+    });
+    html += '</div>';
+  });
+  g.innerHTML = html;
+}
+
+// BEFORE/AFTER 위험도 변화 (소형 그리드)
+function renderRiskGrid(id: string, mode: string){
+  const g = $(id);
+  if(!g) return;
+  let html = '<div class="flex gap-1 pl-6">' + ZONES.map(z=> '<div class="flex-1 text-[8px] text-center text-outline font-bold">' + z + '</div>').join('') + '</div>';
+  DEPTHS.forEach(d=>{
+    html += '<div class="flex gap-1 items-center"><span class="w-5 text-[8px] font-bold text-outline">D' + d + '</span>';
+    ZONES.forEach(z=>{
+      const cell = cells.find(c=> c.id === z + d);
+      if(!cell){ html += '<div class="flex-1 h-6 bg-surface-container-high rounded-sm"></div>'; return; }
+      const risk = mode === 'before' ? (beforeRiskMap[cell.id] || cell.risk) : cell.risk;
+      let color = cellColor(risk);
+      if(mode === 'after' && cell.resolved) color = 'bg-status-success';
+      html += '<div class="flex-1 h-6 ' + color + ' rounded-sm"></div>';
+    });
+    html += '</div>';
+  });
+  g.innerHTML = html;
+}
+
+// 셀 상세 분석 (AI 브리핑 전환)
+(window as any).__showCellDetails = (cellId: string)=>{
+  $('ai-briefing-default').classList.add('hidden');
+  $('ai-briefing-detail').classList.remove('hidden');
+  $('detail-cell-id').innerText = cellId;
+  const cell = cells.find(c=> c.id === cellId);
+  if(!cell) return;
+  const alive = cell.cars.filter((c: any)=> !c.removed);
+  const mto = alive.filter((c: any)=> c.mto === 'MTO').length;
+  const mts = alive.filter((c: any)=> c.mto === 'MTS').length;
+  const shuffles = alive.filter((c: any)=> c.shuffle).length;
+  $('detail-depth').textContent = 'D' + cell.depth + (cell.depth >= 3 ? ' (심부)' : '');
+  $('detail-msg').innerHTML = '해당 셀은 MTO/MTS 혼재로 셔플링 차량 ' + shuffles + '대가 출고 경로를 막고 있습니다. G-Lifter 선제 투입이 시급합니다.';
+  $('detail-mto').textContent = mto + '대';
+  $('detail-mts').textContent = mts + '대';
+  $('detail-shuffle').textContent = shuffles + '대';
+  $('detail-glifter').textContent = cell.hasG ? '배치됨' : '미배치';
+  $('detail-plan').textContent = 'G-Lifter를 해당 셀 상단에 배치하여 셔플링 대상 차량을 수직 인양하여 출고 경로를 즉시 확보해야 합니다.';
+};
+(window as any).__hideCellDetails = ()=>{
+  $('ai-briefing-default').classList.remove('hidden');
+  $('ai-briefing-detail').classList.add('hidden');
+};
+
 function drawHeatmaps(){
-  ensureBundleViewer();
-  drawHeatmap('heatmap-before','before');
-  drawHeatmap('heatmap-after','after');
-  if(selectedCellId && cells.some(c=>c.id===selectedCellId)) renderBundleViewer(selectedCellId, simDone ? 'after' : 'before');
+  renderYardGrid();
+  renderRiskGrid('grid-before','before');
+  renderRiskGrid('grid-after','after');
   drawSatellite('satellite-view','after');   // 위성 매핑 단일 라이브 뷰 (단계 진행에 따라 갱신)
 }
 
@@ -821,29 +918,24 @@ function exportCSV(){
     const result = c.hadDispatch ? (c.resolved ? 'RESOLVED' : (c.pending ? 'PENDING' : 'DISPATCH_ONLY')) : '-';
     cellRows.push([c.id, beforeRiskMap[c.id]||c.risk, c.risk, beforeShuffleMap[c.id]||0, c.shuffleCount, beforeCountMap[c.id]||0, c.aliveCount, c.dispatched, c.direct, c.shuffled, result, c.hasG?'Y':'N']);
   });
-  const dl = (name: string, rows: any[][])=>{
-    const csv = rows.map(r=>r.map(v=>{ if(v===null||v===undefined) return ''; const s=String(v); return /[\",\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s; }).join(',')).join('\n');
-    const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    try{
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.style.display = 'none';
-      document.body.appendChild(a);            // 일부 브라우저는 DOM 부착 필요
-      a.click();
-      setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-    }catch(err){
-      // 다운로드 차단 환경(iframe/웹뷰 등) 폴백: 새 탭으로 CSV 열기
-      console.error('[CSV 다운로드 실패]', err);
-      window.open(url, '_blank');
-      addLog('[내보내기] 다운로드가 차단되어 새 탭으로 열었습니다: ' + name);
-    }
-  };
-  const ts = new Date().toISOString().replace(/[-:T]/g,'').slice(0,12);
-  dl('G-Lifter_이벤트로그_' + ts + '.csv', evRows);
-  dl('G-Lifter_셀해소결과_' + ts + '.csv', cellRows);
-  addLog('[내보내기] 이벤트 ' + events.length + '건 + 셀 해소 결과 ' + cells.length + '행');
+  const toCsv = (rows: any[][])=> rows.map(r=>r.map(v=>{ if(v===null||v===undefined) return ''; const s=String(v); return /[\",\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s; }).join(',')).join('\n');
+  const csv = '[셀 해소 결과]\n' + toCsv(cellRows) + '\n\n[이벤트 로그]\n' + toCsv(evRows);
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const fname = 'G-Lifter_분석결과_' + new Date().toISOString().replace(/[-:T]/g,'').slice(0,12) + '.csv';
+  // 1) 자동 다운로드 시도 (일부 환경에서는 차단될 수 있음)
+  try{
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ document.body.removeChild(a); }, 300);
+  }catch(err){ console.error('[CSV 자동 다운로드 실패]', err); }
+  // 2) 다운로드 모달 제공 — 직접 링크 클릭 + 미리보기 복사 (차단 환경 대응)
+  if($('export-link')){ $('export-link').href = url; $('export-link').setAttribute('download', fname); }
+  if($('export-preview')){ ($('export-preview') as HTMLTextAreaElement).value = csv; }
+  if($('export-modal')){ $('export-modal').classList.remove('hidden'); }
+  addLog('[내보내기] 분석 결과 CSV 생성: ' + fname + ' (' + (cellRows.length-1) + '셀 · 이벤트 ' + events.length + '건)');
 }
 
 $('upload-yard-box').addEventListener('click', ()=> $('file-yard').click());
@@ -870,9 +962,33 @@ $('file-dispatch').addEventListener('change', e=>{
   };
   reader.readAsText(file);
 });
+// 중복 id(헤더/모달)를 모두 잡는 헬퍼
+function all$(id: string): any[] { return Array.from(document.querySelectorAll('[id="' + id + '"]')); }
+// null-safe DOM 쓰기 헬퍼 (요소 누락 시 크래시 방지)
+function setT(id: string, v: any){ const el = $(id); if(el) el.textContent = v; }
+function setW(id: string, v: string){ const el = $(id); if(el) el.style.width = v; }
+function setH(id: string, v: any){ const el = $(id); if(el) el.innerHTML = v; }
+
 $('btn-run').addEventListener('click', ()=>{ if(isRunning) stepTick(); else runDispatch(); });
 $('btn-undo').addEventListener('click', ()=>{ if(!historyStack.length){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; } undoStep(); });
-$('btn-export').addEventListener('click', exportCSV);
+// 모달 내 중복 버튼에도 동일 핸들러 바인딩
+all$('btn-run').forEach(b=> b.addEventListener('click', ()=>{ if(isRunning) stepTick(); else runDispatch(); }));
+all$('btn-undo').forEach(b=> b.addEventListener('click', ()=>{ if(!historyStack.length){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; } undoStep(); }));
+// 중복 id(상세뷰/운영성과)의 내보내기 버튼 전부에 동일 핸들러 바인딩
+all$('btn-export').forEach(b=> b.addEventListener('click', exportCSV));
+// CSV 미리보기 복사
+$('btn-copy-csv').addEventListener('click', ()=>{
+  const prev = $('export-preview') as HTMLTextAreaElement | null;
+  if(!prev || !prev.value) return;
+  try{
+    prev.select();
+    prev.setSelectionRange(0, 999999);
+    document.execCommand('copy');
+    addLog('[복사] CSV 전체를 클립보드에 복사했습니다.');
+  }catch(e){
+    navigator.clipboard.writeText(prev.value).then(()=> addLog('[복사] CSV 전체를 클립보드에 복사했습니다.')).catch(()=>{});
+  }
+});
 $('glifter-count').addEventListener('change', ()=>{
   if(isRunning){ addLog('[오류] 출고 실행 중에는 G-Lifter 대수를 변경할 수 없습니다.'); return; }
   if(!yardLoaded){ addLog('[오류] G-Lifter 대수를 변경하려면 야드를 먼저 로드하세요.'); return; }
@@ -883,16 +999,26 @@ $('glifter-count').addEventListener('change', ()=>{
 $('btn-reset').addEventListener('click', ()=>{
   if(isRunning){ addLog('[오류] 출고 실행 중에는 초기화할 수 없습니다.'); return; }
   cells = []; plateIndex = {}; events = []; timeline = []; simDone = false; yardLoaded = false;
-  $('data-badge').textContent = '● 야드 미로드';
-  $('data-badge').className = 'badge warn';
+  $('data-badge').textContent = '시스템 대기';
+  $('data-badge').className = 'flex items-center gap-2 bg-green-50 text-status-success rounded-full text-xs font-medium border border-green-100';
   $('yard-info').textContent = '야드 엑셀을 업로드하세요.';
   $('plate-input').value = '';
   resetOutputs();
-  $('heatmap-before').innerHTML = '';
-  $('heatmap-after').innerHTML = '';
-  hideBundleViewer();
+  $('yard-grid').innerHTML = '';
+  $('grid-before').innerHTML = '';
+  $('grid-after').innerHTML = '';
+  $('satellite-view').innerHTML = '';
   logEl.innerHTML = '';
   addLog('[초기화] 야드 엑셀을 업로드하세요.');
 });
+
+// 헤더 시계
+setInterval(()=>{
+  const el = $('clock');
+  if(el){
+    const d = new Date();
+    el.textContent = d.getHours() + '시 ' + d.getMinutes() + '분 ' + d.getSeconds() + '초';
+  }
+}, 1000);
 
 addLog('사용법: 1) 야드 마스터 엑셀 업로드 → 2) 빼고 싶은 차량 번호판 CSV 업로드(대량 가능) → 3) 출고 실행 → 셀별 해소 결과 확인');
