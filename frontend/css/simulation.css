@@ -23,6 +23,7 @@
   .btn{padding:9px 12px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;transition:.15s;width:100%}
   .btn:hover{transform:translateY(-1px);opacity:.92}
   .btn-primary{background:var(--primary);color:#fff}
+  .btn-undo{background:#f59e0b;color:#fff}
   .btn-export{background:#0f766e;color:#fff}
   .btn-reset{background:#e2e8f0;color:#475569}
   .file-info{font-size:12px;color:var(--text-sub);background:#f1f5f9;border-radius:8px;padding:10px;line-height:1.6;word-break:break-all;max-height:140px;overflow-y:auto}
@@ -69,6 +70,6 @@
   .ai-sec{display:flex;gap:6px;align-items:baseline}
   .ai-tag{flex-shrink:0;font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;color:#fff}
   .ai-tag.diag{background:#2563eb}
-  .ai-tag.cause{background:#d97706}
+  .ai-tag.cell{background:#d97706}
   .ai-tag.pred{background:#7c3aed}
   .ai-tag.rec{background:#16a34a}

@@ -55,6 +55,7 @@
             <div class="note" id="sim-progress">출고 실행 대기 중</div>
           </div>
           <button class="btn btn-primary" id="btn-run">▶️ 출고 실행 (단계별 셔플링 해소 확인)</button>
+          <button class="btn btn-undo" id="btn-undo" disabled>↩️ 출고 되돌리기</button>
           <button class="btn btn-export" id="btn-export">⬇️ 산출물 CSV</button>
           <button class="btn btn-reset" id="btn-reset">🔄 초기화</button>
         </div>
@@ -76,8 +77,8 @@
             </div>
             <div class="ai-body" id="ai-text">
               <div class="ai-sec"><span class="ai-tag diag">진단</span><span id="ai-diagnosis">—</span></div>
-              <div class="ai-sec"><span class="ai-tag cause">원인</span><span id="ai-cause">—</span></div>
-              <div class="ai-sec"><span class="ai-tag pred">예측</span><span id="ai-prediction">—</span></div>
+              <div class="ai-sec"><span class="ai-tag cell">셀 분석</span><span id="ai-cell-analysis">—</span></div>
+              <div class="ai-sec"><span class="ai-tag pred">리포트</span><span id="ai-prediction">—</span></div>
               <div class="ai-sec"><span class="ai-tag rec">추천</span><span id="ai-recommendation">—</span></div>
             </div>
           </div>
@@ -90,7 +91,7 @@
           <div class="result-log" id="gl-board"><b>🚚 G-Lifter 이동 현황:</b> 출고 실행 후 표시됩니다.</div>
 
           <div class="result-log" id="cell-result-log"><b>셀별 해소 결과:</b> 출고 실행 후 표시됩니다.</div>
-          <div class="note">※ R1 셔플링 = shuffle_yn=Y 차량(행3 30%, 사람 출고 불가) · R2 Direct = 셔플링 아님 즉시 출고 · R3 G-Lifter 배치 셀(고위험 상위 3곳) <span class="resolved">✅ 해소</span> · R4 미배치 셀 <span class="pending">🚧 잔존(출고 불가)</span> · R5 위험도 = 셔플링 차량 수 3분위(상위 33% HIGH)</div>
+          <div class="note">※ R1 셔플링 = shuffle_yn=Y 차량(행3 30%) · R2 Direct = 즉시 출고(1분) · R3 G-Lifter가 지시된 셔플링 차량만 1대씩 해소(이동·인양 포함 5분/건) <span class="resolved">✅ 해소</span> · 지시는 업로드 순서대로 분산 처리 → 클릭 단위 점진 해소 · 미지시 셔플링은 야드에 잔존 · G-Lifter vs 인간 시간 비교 제공</div>
         </div>
       </div>
     </div>
@@ -119,16 +120,7 @@
       <div class="result-log" id="gl-timeline"><b>⏱️ G-Lifter 이동 타임라인:</b> 출고 실행 후 표시됩니다.</div>
 
       <h3 style="margin-top:14px">🛰️ 위성 매핑 (대표 셀 3개 — 실제 항만 시각화)</h3>
-      <div class="hm-grid">
-        <div class="hm-card">
-          <div class="hm-title before">【출고 전】</div>
-          <svg id="satellite-before" viewBox="0 0 627 528" style="width:100%;height:auto;background:#0f172a;border-radius:10px"></svg>
-        </div>
-        <div class="hm-card">
-          <div class="hm-title after">【출고 후】</div>
-          <svg id="satellite-after" viewBox="0 0 627 528" style="width:100%;height:auto;background:#0f172a;border-radius:10px"></svg>
-        </div>
-      </div>
+      <svg id="satellite-view" viewBox="0 0 627 528" style="width:100%;height:auto;background:#0f172a;border-radius:10px"></svg>
 
       <div class="log" id="log">&gt; 야드 엑셀을 먼저 업로드하세요.</div>
     </div>
