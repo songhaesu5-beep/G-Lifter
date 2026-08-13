@@ -838,13 +838,10 @@
                 <p class="text-lg text-gray-600 font-medium">AS-IS 대비 TO-BE 정량적 / 정성적 개선 지표</p>
             </div>
 
-            <!-- Table-like Header -->
+            <!-- Table-like Header (우측 상단 '기대효과' 배지 박스 및 글자 완벽 삭제됨) -->
             <div class="hidden lg:grid grid-cols-12 gap-4 mb-6 relative">
                 <div class="col-span-4 text-center font-black text-gray-500 text-lg border-b-2 border-gray-300 pb-3">AS - IS</div>
-                <div class="col-span-8 flex justify-between items-center border-b-2 border-[#0033a0] pb-3 relative">
-                    <div class="w-full text-center font-black text-[#0033a0] text-lg">TO - BE</div>
-                    <div class="absolute right-10 -top-2 bg-[#001f60] text-white text-sm font-bold px-6 py-2 rounded-full shadow-md">기대효과</div>
-                </div>
+                <div class="col-span-8 border-b-2 border-[#0033a0] pb-3 text-center font-black text-[#0033a0] text-lg">TO - BE</div>
             </div>
 
             <!-- List Container -->
@@ -1525,7 +1522,7 @@
                         const facingAisleAngle = escapeX > worldPos.x ? Math.PI : 0;
                         carTl.to(targetCar.mesh.rotation, { y: facingAisleAngle, duration: 0.5, ease: "power2.inOut" });
                         
-                        carTl.to(targetCard.mesh ? targetCar.mesh.position : targetCar.mesh.position, { x: escapeX, duration: 1.5, ease: "power1.inOut" }); // fallback safely
+                        carTl.to(targetCar.mesh.position, { x: escapeX, duration: 1.5, ease: "power1.inOut" });
                         
                         carTl.to(targetCar.mesh.rotation, { y: Math.PI / 2, duration: 0.8, ease: "power2.inOut" });
                         
