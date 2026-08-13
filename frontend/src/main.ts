@@ -1,4 +1,5 @@
 import { AIProvider } from './aiProvider';
+import { drawSatellite, resetSatelliteCache } from './southportView';
 
 // DOM 헬퍼 — 동적 접근 코드의 타입 안전성을 위해 any 반환
 const $ = (id: string): any => document.getElementById(id);
@@ -82,12 +83,27 @@ const BUNDLE_COUNT = 3, BUNDLE_ROWS = 5, BUNDLE_COLS = 22, PER_CELL = 330;
 const TIME_HUMAN = 2.3, TIME_GL = 0.8, TIME_MOVE = 2;
 const MAX_DISPATCH = 5000;
 
+// Bundle 실사 배치도: southport.jpeg는 3개 bundle을 좌→우로 보여주는 템플릿이다.
+// Excel의 bundle(1~3), row(1~5), column(1~22)를 이미지 좌표에 매핑한다.
+const BUNDLE_IMAGE_URL = new URL('./southport.jpeg', import.meta.url).href;
+const BUNDLE_IMAGE_W = 1160, BUNDLE_IMAGE_H = 924;
+// 사진의 3개 bundle 영역. 각 영역은 촬영 각도에 맞춰 4점으로 잡는다.
+// Excel의 row(가로 5칸) × column(세로 22칸)을 이 사각형에 bilinear mapping한다.
+const BUNDLE_QUADS = [
+  {tl:[30,18],  tr:[347,16],  br:[386,900], bl:[75,923]},
+  {tl:[398,12], tr:[682,10],  br:[716,879], bl:[428,892]},
+  {tl:[763,10], tr:[1088,10], br:[1112,849], bl:[801,863]}
+];
+let selectedCellId: string | null = null;
+
 let cells: any[] = [];
 let plateIndex: any = {};   // 번호판(정규화) → {cell, bundle, car}
 let events: any[] = [];
 let timeline: any[] = [];             // G-Lifter 이동 타임라인
 let severityRank: any = {};         // cell_id → 심각도 순위 (작을수록 심각)
 let glifterState: any[] = [];         // {id, rankIdx, cell} — G-Lifter 현재 위치
+// 위성 뷰(southportView)용 상태 노출
+(window as any).__yard = { cells: ()=>cells, glifterState: ()=>glifterState };
 let simDone = false, yardLoaded = false;
 let logEl = $('log');
 function addLog(m){ logEl.innerHTML += '<div>&gt; ' + m + '</div>'; logEl.scrollTop = logEl.scrollHeight; }
@@ -284,6 +300,7 @@ function loadYardFile(file){
 }
 
 function resetOutputs(){
+  resetSatelliteCache();   // 위성 뷰 캐시 리셋
   $('ai-progress').style.width = '0%';
   $('ai-progress-label').textContent = '대기 중';
   $('ai-resolved').textContent = 0;
@@ -435,6 +452,7 @@ function stepTick(){
   cells.forEach(c=> c.updateStats());
   updateAI();                                         // 단계 진행 시 AI 설명도 함께 갱신
   drawHeatmap('heatmap-after','after');               // 클릭 단계마다 <출고 후> 갱신
+  if(selectedCellId && cells.some(c=>c.id===selectedCellId)) renderBundleViewer(selectedCellId, 'after');
   renderTimeline();
   renderGlifterBoard();
   if(st.idx < st.plates.length){
@@ -485,6 +503,117 @@ function finishDispatch(){
   setRunning(false);
 }
 
+function ensureBundleViewer(){
+  let viewer = $('bundle-viewer');
+  if(viewer) return viewer;
+
+  const anchor = $('heatmap-before') || $('heatmap-after');
+  if(!anchor || !anchor.parentElement) return null;
+
+  viewer = document.createElement('div');
+  viewer.id = 'bundle-viewer';
+  viewer.style.cssText = [
+    'display:none', 'margin:16px 0', 'padding:16px', 'border:1px solid #dbe3ef',
+    'border-radius:14px', 'background:#f8fafc', 'box-sizing:border-box'
+  ].join(';');
+
+  viewer.innerHTML = `
+    <div id="bundle-viewer-title" style="font-weight:800;font-size:16px;margin-bottom:10px"></div>
+    <div style="position:relative;width:100%;overflow:auto;border-radius:10px;background:#0f172a">
+      <div id="bundle-stage" style="position:relative;width:${BUNDLE_IMAGE_W}px;height:${BUNDLE_IMAGE_H}px;transform-origin:top left">
+        <img src="${BUNDLE_IMAGE_URL}" alt="Bundle yard layout" draggable="false"
+             style="position:absolute;inset:0;width:${BUNDLE_IMAGE_W}px;height:${BUNDLE_IMAGE_H}px;display:block;user-select:none">
+        <svg id="bundle-overlay" viewBox="0 0 ${BUNDLE_IMAGE_W} ${BUNDLE_IMAGE_H}"
+             width="${BUNDLE_IMAGE_W}" height="${BUNDLE_IMAGE_H}"
+             style="position:absolute;inset:0;pointer-events:none"></svg>
+      </div>
+    </div>
+    <div id="bundle-viewer-legend" style="margin-top:9px;font-size:12px;color:#64748b"></div>
+  `;
+
+  anchor.parentElement.insertBefore(viewer, anchor);
+  return viewer;
+}
+
+function slotQuad(quad, row, column){
+  // Excel 구조: row=1~5, column=1~22.
+  // 사진 구조: 5열 × 22행 → row를 X, column을 Y로 매핑한다.
+  const u0 = (row - 1) / 5;
+  const u1 = row / 5;
+  const v0 = (column - 1) / 22;
+  const v1 = column / 22;
+
+  const bilinear = (u, v)=>{
+    const [tlx,tly] = quad.tl, [trx,try_] = quad.tr;
+    const [brx,bry] = quad.br, [blx,bly] = quad.bl;
+    return [
+      (1-u)*(1-v)*tlx + u*(1-v)*trx + u*v*brx + (1-u)*v*blx,
+      (1-u)*(1-v)*tly + u*(1-v)*try_ + u*v*bry + (1-u)*v*bly
+    ];
+  };
+
+  const p1 = bilinear(u0,v0), p2 = bilinear(u1,v0);
+  const p3 = bilinear(u1,v1), p4 = bilinear(u0,v1);
+  return [p1,p2,p3,p4].map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+}
+
+function renderBundleViewer(cellId, mode='before'){
+  const viewer = ensureBundleViewer();
+  if(!viewer) return;
+  const cell = cells.find(c=>c.id===cellId);
+  if(!cell) return;
+  selectedCellId = cellId;
+
+  viewer.style.display = 'block';
+  const title = $('bundle-viewer-title');
+  if(title) title.textContent = `${cell.id} · 3 Bundle × 5 Row × 22 Column`;
+
+  const overlay = $('bundle-overlay');
+  if(!overlay) return;
+  overlay.innerHTML = '';
+
+  const NS = 'http://www.w3.org/2000/svg';
+  let alive = 0, empty = 0, removed = 0, shuffle = 0;
+
+  cell.bundles.forEach((bundle, bi)=>{
+    const quad = BUNDLE_QUADS[bi];
+    bundle.forEach(car=>{
+      if(car.empty || (!car.plateNo && !car.bl)) empty++;
+      else alive++;
+      if(car.removed) removed++;
+      if(car.shuffle) shuffle++;
+
+      const poly = document.createElementNS(NS, 'polygon');
+      poly.setAttribute('points', slotQuad(quad, car.row, car.column));
+      poly.setAttribute('fill', car.removed ? 'rgba(15,23,42,0.62)' :
+        car.shuffle ? 'rgba(249,115,22,0.38)' :
+        (car.empty || (!car.plateNo && !car.bl)) ? 'rgba(148,163,184,0.20)' : 'rgba(59,130,246,0.04)');
+      poly.setAttribute('stroke', car.shuffle && !car.removed ? '#f97316' :
+        car.removed ? '#334155' : 'rgba(255,255,255,0.12)');
+      poly.setAttribute('stroke-width', car.shuffle || car.removed ? '2' : '0.5');
+      poly.style.pointerEvents = 'all';
+      poly.style.cursor = 'pointer';
+
+      const tip = document.createElementNS(NS, 'title');
+      const plate = car.plateNo || '(공차/빈 슬롯)';
+      tip.textContent = `Bundle ${bi+1} · Row ${car.row} · Column ${car.column}\n번호판: ${plate}\nBL: ${car.bl || '-'}\n차종: ${car.model || '-'}\n셔플링: ${car.shuffle ? 'Y' : 'N'}${car.removed ? '\n출고됨' : ''}`;
+      poly.appendChild(tip);
+      overlay.appendChild(poly);
+    });
+  });
+
+  const legend = $('bundle-viewer-legend');
+  if(legend){
+    legend.innerHTML = `🟧 셔플링 ${shuffle}대 · ⬛ 출고 ${removed}대 · 🚗 차량 ${alive}대 · ◻ 공차/빈 슬롯 ${empty}대`;
+  }
+}
+
+function hideBundleViewer(){
+  const viewer = $('bundle-viewer');
+  if(viewer) viewer.style.display = 'none';
+  selectedCellId = null;
+}
+
 function drawHeatmap(svgId, mode){
   const svg = $(svgId);
   svg.innerHTML = '';
@@ -522,6 +651,8 @@ function drawHeatmap(svgId, mode){
     rect.setAttribute('stroke', resolvedCell ? '#1e40af' : '#fff');
     rect.setAttribute('stroke-width', resolvedCell ? 3 : 1.2);
     svg.appendChild(rect);
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('click', ()=> renderBundleViewer(cell.id, mode));
 
     const t1 = el('text');
     t1.setAttribute('x',x+w/2); t1.setAttribute('y',y+h/2-9); t1.setAttribute('text-anchor','middle'); t1.setAttribute('class','hm-text');
@@ -592,8 +723,12 @@ function drawHeatmap(svgId, mode){
 }
 
 function drawHeatmaps(){
+  ensureBundleViewer();
   drawHeatmap('heatmap-before','before');
   drawHeatmap('heatmap-after','after');
+  if(selectedCellId && cells.some(c=>c.id===selectedCellId)) renderBundleViewer(selectedCellId, simDone ? 'after' : 'before');
+  drawSatellite('satellite-before','before');   // 위성 매핑 (대표 셀 3개)
+  drawSatellite('satellite-after','after');
 }
 
 function exportCSV(){
@@ -606,10 +741,24 @@ function exportCSV(){
     const result = c.hadDispatch ? (c.resolved ? 'RESOLVED' : (c.pending ? 'PENDING' : 'DISPATCH_ONLY')) : '-';
     cellRows.push([c.id, beforeRiskMap[c.id]||c.risk, c.risk, beforeShuffleMap[c.id]||0, c.shuffleCount, beforeCountMap[c.id]||0, c.aliveCount, c.dispatched, c.direct, c.shuffled, result, c.hasG?'Y':'N']);
   });
-  const dl = (name, rows)=>{
+  const dl = (name: string, rows: any[][])=>{
     const csv = rows.map(r=>r.map(v=>{ if(v===null||v===undefined) return ''; const s=String(v); return /[\",\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s; }).join(',')).join('\n');
     const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+    const url = URL.createObjectURL(blob);
+    try{
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.style.display = 'none';
+      document.body.appendChild(a);            // 일부 브라우저는 DOM 부착 필요
+      a.click();
+      setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+    }catch(err){
+      // 다운로드 차단 환경(iframe/웹뷰 등) 폴백: 새 탭으로 CSV 열기
+      console.error('[CSV 다운로드 실패]', err);
+      window.open(url, '_blank');
+      addLog('[내보내기] 다운로드가 차단되어 새 탭으로 열었습니다: ' + name);
+    }
   };
   const ts = new Date().toISOString().replace(/[-:T]/g,'').slice(0,12);
   dl('G-Lifter_이벤트로그_' + ts + '.csv', evRows);
@@ -660,6 +809,7 @@ $('btn-reset').addEventListener('click', ()=>{
   resetOutputs();
   $('heatmap-before').innerHTML = '';
   $('heatmap-after').innerHTML = '';
+  hideBundleViewer();
   logEl.innerHTML = '';
   addLog('[초기화] 야드 엑셀을 업로드하세요.');
 });
