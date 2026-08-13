@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G-Lifter 3D Pro: Mega Port Simulation (HD Edition)</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --accent: #f59e0b;
+            --bg-dark: #0f172a;
+            --panel: #ffffff;
+            --car-target: #ef4444;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+        }
+        body { font-family: 'Pretendard', -apple-system, sans-serif; background: #cbd5e1; display: flex; justify-content: center; padding: 20px; margin: 0; color: var(--text-main); overflow: hidden; }
+        
+        .dashboard { display: flex; gap: 20px; width: 1450px; height: 900px; }
+        
+        .sidebar { width: 420px; background: var(--panel); padding: 25px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px; z-index: 10; overflow-y: auto; }
+        
+        .header h2 { margin: 0; font-size: 24px; font-weight: 800; color: var(--bg-dark); letter-spacing: -1px; }
+        .header p { font-size: 13px; color: var(--text-sub); margin-top: 4px; line-height: 1.4; }
+        
+        .control-group { display: flex; flex-direction: column; gap: 6px; }
+        label { font-size: 13px; font-weight: 700; color: var(--text-sub); }
+        select { padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 14px; font-weight: 600; background: #f8fafc; cursor: pointer; outline: none; }
+        
+        button { padding: 14px; border-radius: 8px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-init { background: #e2e8f0; color: #475569; }
+        .btn-restore { background: #cbd5e1; color: #1e293b; margin-top: -5px; } 
+        .btn-std { background: #475569; color: white; margin-top: 5px; }
+        .btn-crane { background: var(--primary); color: white; }
+        button:hover:not(:disabled) { transform: translateY(-2px); opacity: 0.9; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
+        .metric-item { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 10px; border-left: 4px solid var(--primary); }
+        .metric-item.danger { border-left-color: var(--car-target); }
+        .metric-label { font-size: 11px; font-weight: 700; color: var(--text-sub); display: block; margin-bottom: 4px; }
+        .metric-val { font-size: 18px; font-weight: 800; color: var(--bg-dark); }
+        .metric-unit { font-size: 12px; color: var(--text-sub); font-weight: 500; }
+
+        .basis-info { font-size: 12px; color: var(--text-sub); line-height: 1.5; background: #f1f5f9; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: auto; }
+        .basis-info strong { color: var(--text-main); display: block; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; }
+        .basis-info ul { padding-left: 20px; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+        .basis-info li { margin-bottom: 2px; }
+
+        .main-view { flex: 1; display: flex; flex-direction: column; gap: 15px; position: relative; }
+        .canvas-container { flex: 1; background: #1e293b; border-radius: 16px; overflow: hidden; border: 4px solid #475569; box-shadow: inset 0 0 50px rgba(0,0,0,0.5); position: relative; }
+        
+        .log-area { height: 130px; background: rgba(15, 23, 42, 0.95); color: #10b981; padding: 15px; border-radius: 12px; font-family: 'Consolas', monospace; font-size: 13px; overflow-y: auto; line-height: 1.6; border: 1px solid #334155; }
+        
+        #view-hint { position: absolute; top: 15px; right: 20px; color: rgba(255,255,255,0.8); font-size: 12px; pointer-events: none; z-index: 5; background: rgba(0,0,0,0.5); padding: 6px 12px; border-radius: 6px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <div class="sidebar">
+        <div class="header">
+            <h2>G-Lifter 3D Mega Port</h2>
+            <p>항만 야적장 4구역 전면 동시 출차 시뮬레이션 [HD]</p>
+        </div>
+        
+        <div class="control-group">
+            <label>대기열 밀집도 (5대 연쇄 주차 x 22열 구역들)</label>
+            <select id="density" onchange="initScenario()">
+                <option value="0.4">보통 (40%)</option>
+                <option value="0.7">빽빽함 (70%)</option>
+                <option value="0.95" selected>매우 빽빽함 (95% - 심각한 병목)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>타겟 좌표 프리셋 (외부 로직 추출)</label>
+            <select id="position" onchange="initScenario()">
+                <option value="outer">선두 구역 좌표 (출구 쪽)</option>
+                <option value="middle">중간 구역 좌표</option>
+                <option value="deep" selected>심부 구역 좌표 (최악 조건)</option>
+            </select>
+        </div>
+
+        <button class="btn-init" id="btn-init" onclick="initScenario(true)">🔄 4구역 차량 재배치 (타겟 좌표 유지)</button>
+        <button class="btn-restore" id="btn-restore" onclick="restoreScenario()">⏪ 동일 배치 원상복구</button>
+        
+        <div style="border-top: 1px dashed #cbd5e1; margin: 2px 0;"></div>
+
+        <button id="btn-std" class="btn-std" onclick="startSim('standard')">🚗 기존 하역 (4구역 동시 발렛 교차)</button>
+        <button id="btn-crane" class="btn-crane" onclick="startSim('crane')">🏗️ G-Lifter (4대 동시 결속 인양)</button>
+
+        <div class="metrics-grid">
+            <div class="metric-item">
+                <span class="metric-label">⏱️ 예상 소요 시간</span>
+                <span id="m-time" class="metric-val">0</span><span class="metric-unit">초</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">👨‍💼 필요 투입 인력 (Total)</span>
+                <span id="m-manpower" class="metric-val">0</span><span class="metric-unit">명</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">🌱 탄소 배출량 (Total)</span>
+                <span id="m-co2" class="metric-val">0</span><span class="metric-unit">g</span>
+            </div>
+            <div class="metric-item danger">
+                <span class="metric-label">⚠️ 누적 사고 위험도</span>
+                <span id="m-risk" class="metric-val">0.0</span><span class="metric-unit">%</span>
+            </div>
+        </div>
+
+        <div class="basis-info">
+            <strong>📊 4구역(동시 작업) 지표 산출 로직</strong>
+            <ul>
+                <li><b>⏱️ 소요 시간:</b> 가장 오래 걸리는 구역의 시간 기준 (병렬 처리)</li>
+                <li><b>👨‍💼 투입 인력:</b> 4개 구역 총합 계산 (G-Lifter는 4명 고정, 기존 방식은 차량 수비례)</li>
+                <li><b>🌱 탄소 배출:</b> 이동한 모든 차량 및 장비의 배출량 총합</li>
+                <li><b>⚠️ 사고 위험:</b> 동시 다발적 교차 이동으로 인한 위험도 누적합</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="main-view">
+        <div class="canvas-container" id="canvas-container">
+            <div id="view-hint">🎥 마우스 드래그로 시점 변경 가능</div>
+        </div>
+        <div class="log-area" id="log">
+            > 시뮬레이션 환경 로드 완료. 4개의 메가 블럭(5x22)이 동시 대기 중입니다.
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<script>
+    const logArea = document.getElementById('log');
+    let isRunning = false;
+    let activeBlocks = []; 
+
+    function addLog(msg) {
+        logArea.innerHTML += `<div>> ${msg}</div>`;
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    const metricData = { t: 0, m: 0, c: 0, r: 0 };
+    function updateMetrics(targetT, targetM, targetC, targetR) {
+        gsap.to(metricData, {
+            t: Number(targetT),
+            m: Number(targetM),
+            c: Number(targetC),
+            r: Number(targetR),
+            duration: 0.6,
+            ease: "power2.out",
+            onUpdate: function() {
+                document.getElementById('m-time').innerText = Math.round(metricData.t);
+                document.getElementById('m-manpower').innerText = Math.round(metricData.m);
+                document.getElementById('m-co2').innerText = Math.round(metricData.c);
+                document.getElementById('m-risk').innerText = metricData.r.toFixed(1);
+            }
+        });
+    }
+
+    function resetMetrics() {
+        metricData.t = 0; metricData.m = 0; metricData.c = 0; metricData.r = 0;
+        document.getElementById('m-time').innerText = "0";
+        document.getElementById('m-manpower').innerText = "0";
+        document.getElementById('m-co2').innerText = "0";
+        document.getElementById('m-risk').innerText = "0.0";
+    }
+
+    function setButtons(disabled) {
+        document.querySelectorAll('button').forEach(btn => btn.disabled = disabled);
+    }
+
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x334155); 
+    scene.fog = new THREE.Fog(0x334155, 300, 1500); 
+
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 4000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // 조명 개선 (금속 재질감을 살리기 위함)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(200, 300, 200);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(4096, 4096);
+    dirLight.shadow.camera.near = 1;
+    dirLight.shadow.camera.far = 2000;
+    dirLight.shadow.camera.left = -500;
+    dirLight.shadow.camera.right = 500;
+    dirLight.shadow.camera.top = 500;
+    dirLight.shadow.camera.bottom = -500;
+    scene.add(dirLight);
+
+    const gridCols = 5; 
+    const gridRows = 22;  
+    const cellX = 8.5; // HD 차량 크기에 맞춰 살짝 넓힘 (기존 8.2)
+    const cellZ = 4.5; // HD 차량 크기에 맞춰 살짝 넓힘 (기존 4.2)
+    const boomAngle = 22 * (Math.PI / 180); 
+
+    function buildStaticEnvironment() {
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(3000, 3000),
+            new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9, metalness: 0.1 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        
+        const ship = new THREE.Mesh(new THREE.BoxGeometry(700, 40, 100), new THREE.MeshStandardMaterial({color: 0x1e3a8a, roughness: 0.7, metalness: 0.3}));
+        ship.position.set(50, 10, -250);
+        ship.castShadow = true; ship.receiveShadow = true;
+        scene.add(ship);
+    }
+
+    // ============================================================
+    // ✨ [개선됨] 고퀄리티 3D 차량 생성 함수 (HD Edition)
+    // ============================================================
+    function create3DCar(isTarget) {
+        const group = new THREE.Group();
+
+        let carColor;
+        if (isTarget) {
+            carColor = 0xef4444; 
+        } else {
+            const grayVal = 0.4 + Math.random() * 0.5; 
+            carColor = new THREE.Color().setRGB(grayVal, grayVal, grayVal);
+        }
+
+        const bodyMat = new THREE.MeshStandardMaterial({ 
+            color: carColor, 
+            metalness: 0.7, 
+            roughness: 0.3, 
+        });
+
+        const windowMat = new THREE.MeshStandardMaterial({ 
+            color: 0x111111, 
+            metalness: 0.9,
+            roughness: 0.1,
+            transparent: true, opacity: 0.9
+        });
+
+        const tireMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9 }); 
+        const rimMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 }); 
+
+        const lightMat = new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffaa, emissiveIntensity: 0.5 }); 
+        const tailLightMat = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xff0000, emissiveIntensity: 0.3 }); 
+
+        const bonnet = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.1, 3.2), bodyMat);
+        bonnet.position.set(-2, 1.0, 0); 
+        bonnet.castShadow = true; bonnet.receiveShadow = true;
+        group.add(bonnet);
+
+        const cabinBase = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.7, 3.2), bodyMat);
+        cabinBase.position.set(1.15, 1.3, 0); 
+        cabinBase.castShadow = true; cabinBase.receiveShadow = true;
+        group.add(cabinBase);
+
+        const cabinTopGeo = new THREE.BoxGeometry(3.0, 1.1, 2.8);
+        const cabinTop = new THREE.Mesh(cabinTopGeo, windowMat);
+        cabinTop.position.set(0.9, 2.3, 0);
+        cabinTop.castShadow = true;
+        group.add(cabinTop);
+
+        const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 2.6), windowMat);
+        windshield.position.set(-0.65, 2.3, 0);
+        windshield.rotation.z = Math.PI / 10; 
+        group.add(windshield);
+
+        const rearWindow = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 2.6), windowMat);
+        rearWindow.position.set(2.45, 2.3, 0);
+        rearWindow.rotation.z = -Math.PI / 10; 
+        group.add(rearWindow);
+
+        const sideWindowGeo = new THREE.BoxGeometry(2.5, 0.9, 0.05);
+        const posSide = [{ x: 0.9, z: 1.4 }, { x: 0.9, z: -1.4 }];
+        posSide.forEach(p => {
+            const sideWin = new THREE.Mesh(sideWindowGeo, windowMat);
+            sideWin.position.set(p.x, 2.3, p.z);
+            group.add(sideWin);
+        });
+
+        const tireGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.6, 24); 
+        const rimGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.61, 24); 
+
+        const wPos = [
+            { x: -1.8, z: 1.6 },  
+            { x: 2.5, z: 1.6 },   
+            { x: -1.8, z: -1.6 }, 
+            { x: 2.5, z: -1.6 }   
+        ];
+
+        wPos.forEach(p => {
+            const wheelGroup = new THREE.Group();
+            wheelGroup.position.set(p.x, 0.8, p.z);
+            wheelGroup.rotation.x = Math.PI / 2; 
+
+            const tire = new THREE.Mesh(tireGeo, tireMat);
+            tire.castShadow = true;
+            wheelGroup.add(tire);
+
+            const rim = new THREE.Mesh(rimGeo, rimMat);
+            wheelGroup.add(rim);
+
+            group.add(wheelGroup);
+        });
+
+        const lightGeo = new THREE.BoxGeometry(0.3, 0.3, 0.6);
+        const headlightLeft = new THREE.Mesh(lightGeo, lightMat);
+        headlightLeft.position.set(-3.25, 1.1, 1.1);
+        group.add(headlightLeft);
+
+        const headlightRight = new THREE.Mesh(lightGeo, lightMat);
+        headlightRight.position.set(-3.25, 1.1, -1.1);
+        group.add(headlightRight);
+
+        const tailLightGeo = new THREE.BoxGeometry(0.3, 0.3, 0.8);
+        const taillightLeft = new THREE.Mesh(tailLightGeo, tailLightMat);
+        taillightLeft.position.set(3.05, 1.3, 1.0);
+        group.add(taillightLeft);
+
+        const taillightRight = new THREE.Mesh(tailLightGeo, tailLightMat);
+        taillightRight.position.set(3.05, 1.3, -1.0);
+        group.add(taillightRight);
+
+        group.position.y = 0.05; 
+
+        return group;
+    }
+    // ============================================================
+
+    function createCrane3D() {
+        const truckRoot = new THREE.Group();
+        
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(26, 4.5, 10), new THREE.MeshStandardMaterial({color: 0xe2e8f0, metalness: 0.5, roughness: 0.4}));
+        chassis.position.y = 3; chassis.castShadow = true; chassis.receiveShadow = true; truckRoot.add(chassis);
+        const darkTrim = new THREE.Mesh(new THREE.BoxGeometry(26.2, 1.5, 10.2), new THREE.MeshStandardMaterial({color: 0x1e293b}));
+        darkTrim.position.y = 1.5; darkTrim.castShadow = true; truckRoot.add(darkTrim);
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 5), new THREE.MeshStandardMaterial({color: 0xffffff, metalness: 0.6, roughness: 0.3}));
+        cabin.position.set(9, 7.5, 2.5); cabin.castShadow = true; truckRoot.add(cabin);
+        const wheelGeo = new THREE.CylinderGeometry(2, 2, 1.5, 24);
+        [-9, -3, 3, 9].forEach(x => {
+            [-5.5, 5.5].forEach(z => {
+                const wheel = new THREE.Mesh(wheelGeo, new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.8}));
+                wheel.rotation.x = Math.PI/2; wheel.position.set(x, 2, z); wheel.castShadow = true; wheel.receiveShadow = true; truckRoot.add(wheel);
+            });
+        });
+
+        const upperBody = new THREE.Group();
+        upperBody.position.set(-8, 6, 0); 
+        truckRoot.add(upperBody);
+
+        const turretBase = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.8, 32), new THREE.MeshStandardMaterial({color: 0x1e293b}));
+        turretBase.position.y = -0.4; turretBase.castShadow = true; turretBase.receiveShadow = true;
+        upperBody.add(turretBase);
+
+        const boomPivot = new THREE.Group();
+        boomPivot.rotation.z = boomAngle;
+        upperBody.add(boomPivot);
+
+        const boomFixed = new THREE.Mesh(new THREE.BoxGeometry(26, 4.5, 5), new THREE.MeshStandardMaterial({color: 0xe2e8f0, metalness: 0.5, roughness: 0.4}));
+        boomFixed.position.x = 13; boomFixed.castShadow = true; boomFixed.receiveShadow = true; boomPivot.add(boomFixed);
+
+        const boomExtMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 3.5, 4), new THREE.MeshStandardMaterial({color: 0x475569, metalness: 0.6, roughness: 0.3}));
+        boomExtMesh.geometry.translate(0.5, 0, 0); boomExtMesh.position.x = 24; boomExtMesh.castShadow = true; boomPivot.add(boomExtMesh);
+
+        const spreaderJoint = new THREE.Group();
+        spreaderJoint.position.x = 24 + 5; spreaderJoint.rotation.z = -boomAngle; boomPivot.add(spreaderJoint);
+
+        const winchCable = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1), new THREE.MeshStandardMaterial({color: 0x111111}));
+        winchCable.geometry.translate(0, -0.5, 0); winchCable.castShadow = true; spreaderJoint.add(winchCable);
+
+        const spreaderGroup = new THREE.Group();
+        spreaderGroup.position.y = -5; spreaderJoint.add(spreaderGroup);
+
+        const spreaderHead = new THREE.Mesh(new THREE.BoxGeometry(4.0, 1, 5.0), new THREE.MeshStandardMaterial({color: 0x1d4ed8, metalness: 0.4, roughness: 0.5}));
+        spreaderHead.castShadow = true; spreaderHead.receiveShadow = true; spreaderGroup.add(spreaderHead);
+
+        const strapGeo = new THREE.CylinderGeometry(0.08, 0.08, 12);
+        strapGeo.translate(0, -6, 0); 
+        const strapMat = new THREE.MeshStandardMaterial({color: 0xeab308, roughness: 0.7});
+        [[1.6, 2], [-1.6, 2], [1.6, -2], [-1.6, -2]].forEach(pos => {
+            const strap = new THREE.Mesh(strapGeo, strapMat);
+            strap.position.set(pos[0], -0.5, pos[1]); 
+            strap.castShadow = true; spreaderGroup.add(strap);
+        });
+
+        const spotLight = new THREE.SpotLight(0xffffff, 0);
+        spotLight.position.set(0, 0, 0); spotLight.angle = Math.PI / 4;
+        spreaderGroup.add(spotLight);
+        const targetObj = new THREE.Object3D(); targetObj.position.set(0,-15,0); spreaderGroup.add(targetObj);
+        spotLight.target = targetObj;
+
+        return { truckRoot, upperBody, boomExtMesh, spreaderJoint, spreaderGroup, winchCable, spotLight };
+    }
+
+    function buildBlock(offsetX, offsetZ, density, tC, tR) {
+        const gridStartX = -15 + offsetX;
+        const gridStartZ = -60 + offsetZ;
+        const aisleX = 35 + offsetX;
+
+        let carsData = [];
+        let targetCarData = null;
+        let meshes = [];
+
+        for(let r=0; r<gridRows; r++) {
+            for(let c=0; c<gridCols; c++) {
+                let isTarget = (r === tR && c === tC);
+                if(isTarget || Math.random() < density) {
+                    const mesh = create3DCar(isTarget);
+                    const x = gridStartX + c * cellX;
+                    const z = gridStartZ + r * cellZ; 
+                    mesh.position.set(x, 0, z);
+                    scene.add(mesh);
+                    meshes.push(mesh);
+                    
+                    const obj = { mesh, r, c, x, z, isTarget };
+                    carsData.push(obj);
+                    if(isTarget) targetCarData = obj;
+                }
+            }
+        }
+
+        const lineMatFloor = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.05, transparent: true });
+        const blockBase = new THREE.Mesh(new THREE.PlaneGeometry(gridCols*cellX, gridRows*cellZ), lineMatFloor);
+        blockBase.rotation.x = -Math.PI / 2;
+        blockBase.position.set(gridStartX + (gridCols*cellX)/2 - cellX/2, 0.05, gridStartZ + (gridRows*cellZ)/2 - cellZ/2);
+        blockBase.receiveShadow = true;
+        scene.add(blockBase);
+        meshes.push(blockBase);
+
+        const lineMatAisle = new THREE.LineBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.5 });
+        const points = [new THREE.Vector3(aisleX, 0.1, gridStartZ - 100), new THREE.Vector3(aisleX, 0.1, gridStartZ + gridRows*cellZ + 100)];
+        const aisleLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), lineMatAisle);
+        scene.add(aisleLine);
+        meshes.push(aisleLine);
+
+        const crane = createCrane3D();
+        scene.add(crane.truckRoot);
+        meshes.push(crane.truckRoot);
+
+        const truckStartZ = gridStartZ - 25;
+        crane.truckRoot.position.set(aisleX, 0, truckStartZ);
+        crane.truckRoot.rotation.y = -Math.PI / 2; 
+
+        return { offsetX, offsetZ, gridStartX, gridStartZ, aisleX, carsData, targetCarData, crane, meshes, truckStartZ };
+    }
+
+    // ============================================================
+    // [외부 로직 연동] 타겟 좌표 추출
+    // 다른 로직(예: 야적장 관리 시스템)이 추출한 월드 좌표(x, z) 배열.
+    // 프리셋별 좌표 세트가 각 블록의 구역 안에 존재하도록 정의되어 있다.
+    // ============================================================
+    const targetCoordPresets = {
+        outer: [
+            { x: 19,   z: -55.5 },
+            { x: 19,   z: 84.5 },
+            { x: 104,  z: -55.5 },
+            { x: 104,  z: 84.5 }
+        ],
+        middle: [
+            { x: -6.5, z: -15 },
+            { x: -6.5, z: 125 },
+            { x: 78.5, z: -15 },
+            { x: 78.5, z: 125 }
+        ],
+        deep: [
+            { x: 2,    z: 3 },
+            { x: 2,    z: 143 },
+            { x: 87,   z: 3 },
+            { x: 87,   z: 143 }
+        ]
+    };
+
+    function initScenario(isRandom = false) {
+        if(isRunning) return;
+        
+        activeBlocks.forEach(b => {
+            b.meshes.forEach(m => scene.remove(m));
+        });
+        activeBlocks = [];
+        resetMetrics();
+
+        const density = parseFloat(document.getElementById('density').value);
+        const posType = document.getElementById('position').value;
+        const coordPreset = targetCoordPresets[posType] || targetCoordPresets.deep;
+
+        const blockOffsets = [
+            { x: 0, z: 0 },         
+            { x: 0, z: 140 },       
+            { x: 85, z: 0 },        
+            { x: 85, z: 140 }       
+        ];
+
+        blockOffsets.forEach((offset, index) => {
+            const targetCoord = coordPreset[index];
+            const gridStartX = -15 + offset.x;
+            const gridStartZ = -60 + offset.z;
+            const tC = Math.min(gridCols - 1, Math.max(0, Math.round((targetCoord.x - gridStartX) / cellX)));
+            const tR = Math.min(gridRows - 1, Math.max(0, Math.round((targetCoord.z - gridStartZ) / cellZ)));
+            activeBlocks.push(buildBlock(offset.x, offset.z, density, tC, tR));
+            addLog(`[외부 좌표 적용] 블록 ${index + 1} → 좌표(${targetCoord.x}, ${targetCoord.z}) → 그리드 셀(행 ${tR}, 열 ${tC})`);
+        });
+
+        gsap.to(camera.position, { x: 250, y: 300, z: 450, duration: 1.5, ease: "power2.out" });
+        gsap.to(controls.target, { x: 50, y: 0, z: 100, duration: 1.5 });
+        
+        addLog(`[메가 포트 스케일업] 외부 로직에서 추출한 타겟 좌표가 4개 구역에 적용되어 배치되었습니다.`);
+    }
+
+    function restoreScenario() {
+        gsap.globalTimeline.clear();
+        
+        activeBlocks.forEach(block => {
+            if (block.targetCarData.mesh.parent === block.crane.spreaderGroup) {
+                scene.add(block.targetCarData.mesh);
+            }
+            block.carsData.forEach(c => {
+                c.mesh.position.set(c.x, 0, c.z);
+                c.mesh.rotation.y = 0; 
+            });
+            
+            block.crane.truckRoot.position.set(block.aisleX, 0, block.truckStartZ);
+            block.crane.truckRoot.rotation.y = -Math.PI / 2;
+            block.crane.upperBody.rotation.y = 0; 
+            block.crane.boomExtMesh.scale.x = 5; 
+            block.crane.spreaderJoint.position.x = 24 + 5;
+            block.crane.winchCable.scale.y = 5; 
+            block.crane.spreaderGroup.position.y = -5; 
+            block.crane.spotLight.intensity = 0;
+        });
+        
+        resetMetrics(); isRunning = false; setButtons(false);
+        addLog(`4개 구역 모두 동일한 주차 조건으로 원상 복구되었습니다.`);
+        gsap.to(camera.position, { x: 250, y: 300, z: 450, duration: 1.5 });
+        gsap.to(controls.target, { x: 50, y: 0, z: 100, duration: 1.5 });
+    }
+
+    async function startSim(mode) {
+        if(isRunning) return;
+        isRunning = true; setButtons(true);
+        addLog(`=================================`);
+        
+        if(mode === 'standard') {
+            addLog(`[기존 하역] 4개 구역 동시 다발적 발렛 출차 작업을 시작합니다. 병목 현상이 극대화됩니다.`);
+            
+            let completedBlocks = 0;
+            let globalMaxTime = 0;
+            let globalManpower = 0;
+            let globalCO2 = 0;
+            let globalRisk = 0;
+
+            activeBlocks.forEach((block) => {
+                const pathCars = block.carsData.filter(c => c.r === block.targetCarData.r && c.c > block.targetCarData.c).sort((a,b) => b.c - a.c);
+                const totalToMove = pathCars.length + 1; 
+                
+                let count = 0;
+                const tl = gsap.timeline();
+                let alignBaseZ = block.targetCarData.z + 15; 
+                let alignGap = 9; 
+
+                for(let c of pathCars) {
+                    let targetZ = alignBaseZ + ((totalToMove - count) * alignGap);
+                    tl.to(c.mesh.position, { x: block.aisleX, duration: 1.0, ease: "power1.inOut" });
+                    tl.to(c.mesh.rotation, { y: -Math.PI / 2, duration: 0.4, ease: "power1.inOut" });
+                    let driveDur = Math.max(0.6, Math.abs(targetZ - c.mesh.position.z) / 40);
+                    tl.to(c.mesh.position, { z: targetZ, duration: driveDur, ease: "power1.inOut" });
+                    tl.to(c.mesh.rotation, { y: 0, duration: 0.4, ease: "power1.inOut" });
+                    count++;
+                }
+                
+                let finalTargetZ = alignBaseZ + ((totalToMove - count) * alignGap);
+                tl.to(block.targetCarData.mesh.position, { x: block.aisleX, duration: 1.0, ease: "power1.inOut" });
+                tl.to(block.targetCarData.mesh.rotation, { y: -Math.PI / 2, duration: 0.4, ease: "power1.inOut" });
+                let finalDriveDur = Math.max(0.6, Math.abs(finalTargetZ - block.targetCarData.mesh.position.z) / 40);
+                tl.to(block.targetCarData.mesh.position, { z: finalTargetZ, duration: finalDriveDur, ease: "power1.inOut" });
+                tl.to(block.targetCarData.mesh.rotation, { y: 0, duration: 0.4, ease: "power1.inOut" });
+                
+                tl.add(() => {
+                    count++; 
+                    let blockTime = count * 45;
+                    if(blockTime > globalMaxTime) globalMaxTime = blockTime; 
+                    
+                    globalManpower += (Math.ceil(count/3) + 1);
+                    globalCO2 += (count * 120);
+                    globalRisk += (count * 6.5);
+                    
+                    updateMetrics(globalMaxTime, globalManpower, globalCO2, globalRisk);
+
+                    completedBlocks++;
+                    if(completedBlocks === activeBlocks.length) {
+                        addLog(`기존 하역 방식 작업 완료. 각 구역마다 막대한 인력과 탄소가 낭비되었습니다.`);
+                        isRunning = false; setButtons(false);
+                    }
+                });
+            });
+
+        } else {
+            addLog(`[G-Lifter 동시 출동] 4대의 G-Lifter가 제각기 다른 위치의 타겟을 향해 유연하게 기동합니다.`);
+            
+            let completedBlocks = 0;
+
+            activeBlocks.forEach((block) => {
+                const tl = gsap.timeline();
+                const approachZ = block.targetCarData.z; 
+                const truckStopZ = approachZ + 8; 
+                const driveTime = Math.max(1.5, Math.abs(truckStopZ - block.truckStartZ) / 30);
+
+                tl.to(block.crane.truckRoot.position, { z: truckStopZ, duration: driveTime, ease: "power1.inOut" });
+                tl.to(block.crane.upperBody.rotation, { y: -Math.PI / 2, duration: 1.5, ease: "power1.inOut" });
+
+                const distX = block.aisleX - block.targetCarData.x; 
+                const L = distX / Math.cos(boomAngle);
+                const extLength = L - 24; 
+                const jointWorldY = 6 + (L * Math.sin(boomAngle));
+                const dropDist = jointWorldY - 12.8; // HD 모델 높이에 맞춘 수직 거리 조정
+                const liftHeight = 15;
+
+                tl.add(() => { block.crane.spotLight.intensity = 5; });
+                tl.to(block.crane.spreaderJoint.position, { x: L, duration: 2, ease: "power2.inOut" }, "extend");
+                tl.to(block.crane.boomExtMesh.scale, { x: Math.max(0.1, extLength), duration: 2, ease: "power2.inOut" }, "extend");
+
+                tl.to(block.crane.spreaderGroup.position, { y: -dropDist, duration: 2, ease: "power1.inOut" }, "drop");
+                tl.to(block.crane.winchCable.scale, { y: dropDist, duration: 2, ease: "power1.inOut" }, "drop");
+                tl.add(() => { 
+                    scene.remove(block.targetCarData.mesh);
+                    block.crane.spreaderGroup.add(block.targetCarData.mesh);
+                    block.targetCarData.mesh.position.set(0, -12.8, 0); // HD 모델용 세팅
+                    block.targetCarData.mesh.rotation.y = -Math.PI; 
+                });
+
+                tl.to(block.crane.spreaderGroup.position, { y: -dropDist + liftHeight, duration: 2, ease: "power2.inOut" }, "lift");
+                tl.to(block.crane.winchCable.scale, { y: dropDist - liftHeight, duration: 2, ease: "power2.inOut" }, "lift");
+
+                const retractL = 30; 
+                const retractJointWorldY = 6 + (retractL * Math.sin(boomAngle));
+                const retractDrop = Math.max(5, retractJointWorldY - 20); 
+
+                tl.to(block.crane.upperBody.rotation, { y: 0, duration: 2, ease: "power1.inOut" }, "turnBack");
+                tl.to(block.crane.spreaderJoint.position, { x: retractL, duration: 2, ease: "power2.inOut" }, "turnBack");
+                tl.to(block.crane.boomExtMesh.scale, { x: Math.max(0.1, retractL - 24), duration: 2, ease: "power2.inOut" }, "turnBack");
+                tl.to(block.crane.spreaderGroup.position, { y: -retractDrop, duration: 2, ease: "power2.inOut" }, "turnBack");
+                tl.to(block.crane.winchCable.scale, { y: retractDrop, duration: 2, ease: "power2.inOut" }, "turnBack");
+
+                const finalDrop = retractJointWorldY - 12.8;
+                tl.to(block.crane.spreaderGroup.position, { y: -finalDrop, duration: 1.5, ease: "bounce.out" }, "finalDrop");
+                tl.to(block.crane.winchCable.scale, { y: finalDrop, duration: 1.5, ease: "power1.inOut" }, "finalDrop");
+                
+                tl.add(() => {
+                    const worldPos = new THREE.Vector3();
+                    const worldQuat = new THREE.Quaternion();
+                    block.targetCarData.mesh.getWorldPosition(worldPos);
+                    block.targetCarData.mesh.getWorldQuaternion(worldQuat);
+
+                    block.crane.spreaderGroup.remove(block.targetCarData.mesh);
+                    scene.add(block.targetCarData.mesh);
+                    
+                    block.targetCarData.mesh.position.copy(worldPos);
+                    block.targetCarData.mesh.quaternion.copy(worldQuat);
+                    block.targetCarData.mesh.position.y = 0; 
+
+                    gsap.to(block.crane.spreaderGroup.position, { y: -10, duration: 1 }); 
+                    gsap.to(block.crane.winchCable.scale, { y: 10, duration: 1 });
+                    block.crane.spotLight.intensity = 0; 
+                    
+                    completedBlocks++;
+                    if(completedBlocks === activeBlocks.length) {
+                        updateMetrics(80, 4, 32, 2.0); 
+                        addLog("4구역 전면 인양 하역 완료! 서로 다른 위치의 타겟이라도 80초 내외의 균일한 퍼포먼스를 보여줍니다.");
+                        isRunning = false;
+                        setButtons(false);
+                    }
+                });
+            });
+        }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        renderer.setSize(width, height);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+    });
+
+    buildStaticEnvironment();
+    animate();
+    setTimeout(initScenario, 500); 
+</script>
+</body>
+</html>

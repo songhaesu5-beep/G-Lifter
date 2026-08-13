@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G-Lifter 배치 의사결정 시스템 - 출고 시뮬레이션 v23</title>
+    <link rel="stylesheet" href="css/simulation.css">
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <h1>🚢 G-Lifter 배치 의사결정 - 출고 시뮬레이션 v20</h1>
+    <span class="sub">빼고 싶은 차량(번호판) 입력 → 셀 단위 셔플링 해소 확인 → 효율적 배치 검증</span>
+    <span class="spacer"></span>
+    <span class="badge warn" id="data-badge">● 야드 미로드</span>
+  </div>
+
+  <div class="body">
+    <div class="card">
+      <h3>1️⃣ 야드 데이터 + KPI 분석</h3>
+      <div class="dash-row">
+        <div class="ctrl-col">
+          <div class="upload-box" id="upload-yard-box">
+            <div class="ico">📊</div>
+            <div class="txt">야드 마스터 엑셀 업로드</div>
+            <div class="subtxt">G-Lifter_raw_data.xlsx</div>
+          </div>
+          <input type="file" id="file-yard" accept=".xlsx,.csv">
+          <div class="file-info" id="yard-info">야드 엑셀을 업로드하세요.</div>
+
+          <div class="control-group" style="margin-top:2px">
+            <label>G-Lifter 대수 (최적화)</label>
+            <input type="number" id="glifter-count" min="1" max="110" value="3" style="padding:10px;border-radius:8px;border:1px solid #e2e8f0;font-size:14px;font-weight:600;background:#f8fafc;outline:none;width:100%">
+            <div class="note">대수 변경 시 G-Lifter가 위험도 최상위 셀에 재배치됩니다.</div>
+          </div>
+
+          <div style="border-top:1px dashed #cbd5e1"></div>
+
+          <div class="upload-box" id="upload-dispatch-box">
+            <div class="ico">📋</div>
+            <div class="txt">번호판 CSV 업로드 (대량 가능)</div>
+            <div class="subtxt">plate_no 컬럼 또는 한 줄에 번호판 1개 · 최대 5,000개</div>
+          </div>
+          <input type="file" id="file-dispatch" accept=".csv,.txt">
+          <textarea id="plate-input" placeholder="78허 0724&#10;24머 3116&#10;05부 7036&#10;..."></textarea>
+          <div class="control-group">
+            <label>시뮬레이션 속도 (단계별 표시)</label>
+            <select id="sim-speed">
+              <option value="200" selected>최소 (200대/단계)</option>
+              <option value="500">보통 (500대/단계)</option>
+              <option value="1000">빠르게 (1000대/단계)</option>
+              <option value="5000">최고속 (일괄)</option>
+            </select>
+            <div class="note" id="sim-progress">출고 실행 대기 중</div>
+          </div>
+          <button class="btn btn-primary" id="btn-run">▶️ 출고 실행 (단계별 셔플링 해소 확인)</button>
+          <button class="btn btn-export" id="btn-export">⬇️ 산출물 CSV</button>
+          <button class="btn btn-reset" id="btn-reset">🔄 초기화</button>
+        </div>
+
+        <div class="analysis-col">
+          <div class="ai-panel">
+            <div class="ai-title">🤖 AI 출고 상황 분석</div>
+            <div class="ai-stats">
+              <div>
+                <div class="ai-progress-wrap"><div class="ai-progress-bar" id="ai-progress"></div></div>
+                <div class="ai-progress-label" id="ai-progress-label">대기 중</div>
+              </div>
+              <div class="ai-chips">
+                <span class="chip chip-green">✅ 해소 <b id="ai-resolved">0</b>건</span>
+                <span class="chip chip-red">🚧 잔존 <b id="ai-pending">0</b>건</span>
+                <span class="chip chip-blue">🚗 Direct <b id="ai-direct">0</b>대</span>
+                <span class="chip chip-orange">🚚 이동 <b id="ai-moves">0</b>회</span>
+              </div>
+            </div>
+            <div class="ai-body" id="ai-text">
+              <div class="ai-sec"><span class="ai-tag diag">진단</span><span id="ai-diagnosis">—</span></div>
+              <div class="ai-sec"><span class="ai-tag cause">원인</span><span id="ai-cause">—</span></div>
+              <div class="ai-sec"><span class="ai-tag pred">예측</span><span id="ai-prediction">—</span></div>
+              <div class="ai-sec"><span class="ai-tag rec">추천</span><span id="ai-recommendation">—</span></div>
+            </div>
+          </div>
+
+          <div class="verdict" id="verdict">
+            <div class="v-title">G-Lifter 효율적 배치 검증</div>
+            <div class="v-sub" id="verdict-text">출고 실행 후, 셔플링이 해소된 셀 비율로 배치 효율을 판단합니다.</div>
+          </div>
+
+          <div class="result-log" id="gl-board"><b>🚚 G-Lifter 이동 현황:</b> 출고 실행 후 표시됩니다.</div>
+
+          <div class="result-log" id="cell-result-log"><b>셀별 해소 결과:</b> 출고 실행 후 표시됩니다.</div>
+          <div class="note">※ R1 셔플링 = shuffle_yn=Y 차량(행3 30%, 사람 출고 불가) · R2 Direct = 셔플링 아님 즉시 출고 · R3 G-Lifter 배치 셀(고위험 상위 3곳) <span class="resolved">✅ 해소</span> · R4 미배치 셀 <span class="pending">🚧 잔존(출고 불가)</span> · R5 위험도 = 셔플링 차량 수 3분위(상위 33% HIGH)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🗺️ 전/후 히트맵 비교 <small>✅ 해소 셀 · 🚧 잔존 셀 표시</small></h3>
+      <div class="hm-grid">
+        <div class="hm-card">
+          <div class="hm-title before">【출고 전】</div>
+          <div class="hm-wrap"><svg id="heatmap-before" viewBox="0 0 960 340" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        </div>
+        <div class="hm-card">
+          <div class="hm-title after">【출고 후】</div>
+          <div class="hm-wrap"><svg id="heatmap-after" viewBox="0 0 960 340" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="background:#fca5a5"></i>고위험</span>
+        <span><i style="background:#fdba74"></i>중위험</span>
+        <span><i style="background:#fde68a"></i>정상</span>
+        <span><i style="background:#f59e0b;border-radius:50%"></i>G-Lifter</span>
+        <span><i style="background:#16a34a;border-radius:50%"></i>✅ 해소</span>
+        <span><i style="background:#dc2626;border-radius:50%"></i>🚧 잔존</span>
+        <span style="margin-left:auto">G-Lifter 해소 셀 = 파란 테두리 (출고 후)</span>
+      </div>
+      <div class="result-log" id="gl-timeline"><b>⏱️ G-Lifter 이동 타임라인:</b> 출고 실행 후 표시됩니다.</div>
+      <div class="log" id="log">&gt; 야드 엑셀을 먼저 업로드하세요.</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script type="module" src="/src/main.ts"></script>
+
+</html>
