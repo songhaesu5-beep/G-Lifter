@@ -496,10 +496,10 @@ async function updateAI(){
   setT('ai-moves', state.moves);
 
   const analysis = await AIProvider.analyze(state);   // AI Provider 경유 (mock → 실제 API 전환 용이)
-  setT('ai-diagnosis', analysis.diagnosis || '—');
-  setT('ai-cell-analysis', analysis.cellAnalysis || '—');
-  setT('ai-prediction', analysis.prediction || '—');
-  setT('ai-recommendation', analysis.recommendation || '—');
+  typeText($('ai-diagnosis'), analysis.diagnosis || '—');
+  typeText($('ai-cell-analysis'), analysis.cellAnalysis || '—');
+  typeText($('ai-prediction'), analysis.prediction || '—');
+  typeText($('ai-recommendation'), analysis.recommendation || '—');
 }
 
 // 수동 단계 진행: 버튼 클릭 1회 = 배치 1개 처리 후 <출고 후> 갱신
@@ -968,6 +968,23 @@ function all$(id: string): any[] { return Array.from(document.querySelectorAll('
 function setT(id: string, v: any){ const el = $(id); if(el) el.textContent = v; }
 function setW(id: string, v: string){ const el = $(id); if(el) el.style.width = v; }
 function setH(id: string, v: any){ const el = $(id); if(el) el.innerHTML = v; }
+
+// AI 타이핑 효과 (타이머를 요소에 저장 — 갱신 시 이전 타이머 중단)
+function typeText(el: any, text: string){
+  if(!el) return;
+  if(el.__typeTimer) clearInterval(el.__typeTimer);
+  el.textContent = '';
+  let i = 0;
+  el.__typeTimer = setInterval(()=>{
+    i += 2;   // 2자씩 (빠른 타이핑)
+    el.textContent = text.slice(0, i);
+    if(i >= text.length){
+      el.textContent = text;
+      clearInterval(el.__typeTimer);
+      el.__typeTimer = null;
+    }
+  }, 14);
+}
 
 $('btn-run').addEventListener('click', ()=>{ if(isRunning) stepTick(); else runDispatch(); });
 $('btn-undo').addEventListener('click', ()=>{ if(!historyStack.length){ addLog('[오류] 되돌릴 단계가 없습니다.'); return; } undoStep(); });
