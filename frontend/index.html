@@ -1,396 +1,1583 @@
-<!DOCTYPE html><html lang="ko">
+<!DOCTYPE html>
+<html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta content="width=device-width, initial-scale=1.0" name="viewport">
-<title>G-Lifter 배치 의사결정 시스템 - 출고 시뮬레이션</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<script id="tailwind-config">
-  tailwind.config = {
-    darkMode: "class",
-    theme: {
-      extend: {
-        colors: {
-          "border-subtle": "#E2E8F0",
-          "on-primary": "#ffffff",
-          "surface-container-low": "#f2f3ff",
-          "on-primary-fixed": "#001b3f",
-          "inverse-on-surface": "#eff0ff",
-          "on-primary-fixed-variant": "#25467a",
-          "on-primary-container": "#7695ce",
-          "primary-container": "#002c5f",
-          "on-surface-variant": "#43474f",
-          "status-success": "#10B981",
-          "background": "#faf8ff",
-          "surface-container-high": "#e3e7ff",
-          "on-surface": "#0d1a3b",
-          "surface-tint": "#3f5e94",
-          "inverse-surface": "#242f51",
-          "secondary-container": "#2dbcfe",
-          "surface-container": "#ebedff",
-          "status-alert": "#EF4444",
-          "surface-gray": "#F8FAFC",
-          "outline-variant": "#c4c6d1",
-          "primary": "#001839",
-          "surface-variant": "#dbe1ff",
-          "surface": "#faf8ff",
-          "surface-container-lowest": "#ffffff",
-          "outline": "#747780"
-        },
-        borderRadius: { DEFAULT: "0.125rem", lg: "0.25rem", xl: "0.5rem", full: "0.75rem" },
-        spacing: { "margin-mobile": "16px", "container-max": "1440px", unit: "4px", gutter: "24px", "margin-desktop": "48px" },
-        fontFamily: { headline: ["Inter"] },
-        fontSize: {
-          "headline-md": ["24px", { lineHeight: "32px", fontWeight: "600" }],
-          "headline-lg": ["32px", { lineHeight: "40px", fontWeight: "600" }],
-          "headline-xl": ["40px", { lineHeight: "48px", fontWeight: "700" }],
-          "body-sm": ["14px", { lineHeight: "20px" }],
-          "body-md": ["16px", { lineHeight: "24px" }]
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G-Lifter Solution | G-Lifter Control System</title>
+    
+    <!-- CSS & Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    
+    <!-- Three.js & GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        body { font-family: 'Pretendard', sans-serif; word-break: keep-all; background-color: #ffffff; color: #1a1a1a; overflow-x: hidden; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid #e5e7eb; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .accent-red { color: #d32f2f; }
+        .bg-accent-red { background-color: #d32f2f; }
+        .text-glovis { color: #0033a0; }
+        .bg-glovis { background-color: #0033a0; }
+        .text-orange-custom { color: #f57c00; }
+        
+        /* 3D 캔버스 고정 비율 래퍼 */
+        #hero-3d-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-color: #0a1128;
+            border-radius: 0.5rem;
+            overflow: hidden;
         }
-      }
-    }
-  }
-</script>
-<style>
-  body { background-color: #f2f3ff; color: #0d1a3b; font-family: 'Inter', sans-serif; }
-  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-  .custom-scrollbar::-webkit-scrollbar-track { background: #ebedff; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { background: #c4c6d1; border-radius: 4px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #747780; }
-</style>
-<script>
-  function showCellDetails(cellId) {
-    if(typeof window.__showCellDetails === 'function') window.__showCellDetails(cellId);
-  }
-  function hideCellDetails() {
-    if(typeof window.__hideCellDetails === 'function') window.__hideCellDetails();
-  }
-</script>
+        #hero-3d-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
+        #hero-3d-container canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            outline: none;
+        }
+
+        /* 표 스타일 */
+        .custom-table th { background-color: #0033a0; color: white; padding: 12px; border: 1px solid #e5e7eb; font-weight: bold; }
+        .custom-table td { padding: 12px; border: 1px solid #e5e7eb; text-align: center; }
+        .custom-table .highlight-row { background-color: #fef08a; font-weight: bold; }
+
+        /* 화살표 도형 */
+        .arrow-down {
+            width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 20px solid #0033a0; margin: 0 auto;
+        }
+
+        /* 이미지/영상 Placeholder 박스 */
+        .placeholder-box {
+            background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+            color: #64748b; font-weight: bold; width: 100%; min-height: 250px;
+        }
+        
+        /* 드롭다운 호버 처리용 부가 스타일 */
+        .dropdown-menu { display: none; }
+        .group:hover .dropdown-menu { display: block; }
+    </style>
 </head>
-<body class="min-h-screen flex flex-col text-sm">
-<!-- BEGIN: Header -->
-<header class="bg-white border-b border-border-subtle px-6 py-4 flex justify-between items-center shadow-sm">
-  <div class="flex items-center gap-4">
-    <div class="bg-primary-container text-white rounded-lg p-2 flex items-center justify-center">
-      <i class="ri-dashboard-2-fill text-xl text-white"></i>
-    </div>
-    <div>
-      <h1 class="text-xl font-bold text-on-surface">G-Lifter 배치 의사결정 시스템</h1>
-    </div>
-  </div>
-  <div class="flex items-center gap-6">
-    <button id="btn-run" class="flex items-center gap-2 px-4 py-1.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-xs font-bold transition-opacity shadow-sm border border-white/20">
-      <span class="material-symbols-outlined text-lg">play_arrow</span><span>분석 시작</span>
-    </button>
-    <button class="flex items-center gap-2 px-3 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface rounded-lg text-xs font-medium transition-colors border border-border-subtle" onclick="document.getElementById('operational-settings-modal').classList.remove('hidden')">
-      <span class="material-symbols-outlined text-lg">settings</span> 설정
-    </button>
-    <span id="data-badge" class="flex items-center gap-2 bg-green-50 text-status-success rounded-full text-xs font-medium border border-green-100">
-      <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-status-success"></span></span>
-      시스템 대기
-    </span>
-    <div class="flex items-center gap-2 text-on-surface-variant text-sm">
-      <i class="ri-time-line"></i><span id="clock">--시 --분 --초</span>
-    </div>
-    <div class="text-xs text-outline border-l border-border-subtle pl-4">v2.5.1</div>
-  </div>
-</header>
-<!-- END: Header -->
-<!-- BEGIN: Main Content -->
-<main class="flex-1 p-6 flex flex-col gap-6 overflow-x-hidden">
-  <!-- Top Row: KPI Cards -->
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <div class="bg-white rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
-      <div><p class="text-xs text-on-surface-variant font-medium mb-1">총 입고 차량</p><h4 class="text-2xl font-bold text-on-surface"><span id="kpi-incoming">0</span><span class="text-sm font-normal text-on-surface-variant ml-1">대</span></h4></div>
-      <div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary-container"><i class="ri-car-line text-xl"></i></div>
-    </div>
-    <div class="bg-white rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
-      <div><p class="text-xs text-on-surface-variant font-medium mb-1">MTO 오더 비율</p><h4 class="text-2xl font-bold text-on-surface"><span id="kpi-mto">0</span><span class="text-sm font-normal text-on-surface-variant ml-1">%</span></h4></div>
-      <div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary-container"><i class="ri-file-list-3-line text-xl"></i></div>
-    </div>
-    <div class="bg-white rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
-      <div><p class="text-xs text-on-surface-variant font-medium mb-1">고위험 셀(셔플링)</p><h4 class="text-2xl font-bold text-status-alert"><span id="kpi-high">0</span><span class="text-sm font-normal text-on-surface-variant ml-1">셀</span></h4></div>
-      <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-status-alert"><i class="ri-error-warning-line text-xl"></i></div>
-    </div>
-    <div class="bg-white rounded-xl p-4 border border-border-subtle shadow-sm flex items-center justify-between">
-      <div><p class="text-xs text-on-surface-variant font-medium mb-1">예상 절감 시간</p><h4 class="text-2xl font-bold text-on-surface"><span id="kpi-saved">0</span><span class="text-sm font-normal text-on-surface-variant ml-1">분</span></h4></div>
-      <div class="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600"><i class="ri-time-line text-xl"></i></div>
-    </div>
-  </div>
+<body class="antialiased selection:bg-blue-100">
 
-  <!-- Middle Row: Main Analysis -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 h-[500px]">
-    <!-- Yard Layout Heatmap -->
-    <section class="lg:col-span-2 bg-white rounded-xl border border-border-subtle shadow-sm flex flex-col h-full overflow-hidden">
-      <div class="p-4 border-b border-border-subtle flex justify-between items-center bg-white">
-        <h2 class="font-bold flex items-center gap-2 text-on-surface"><i class="ri-layout-grid-fill text-primary-container"></i> 야드 배치 현황</h2>
-        <div class="flex items-center gap-4 text-[10px] text-on-surface-variant">
-          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-status-alert"></span> 고위험</div>
-          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-yellow-400"></span> 중위험</div>
-          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-surface-container-high"></span> 정상</div>
-          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-status-success"></span> 해소</div>
-          <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full border border-primary-container bg-white shadow-sm flex items-center justify-center"><div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div></div> G-Lifter</div>
+    <!-- Navigation -->
+    <nav class="fixed w-full z-50 bg-white border-b border-gray-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-black rounded flex items-center justify-center text-white font-bold italic">H</div>
+                <span class="text-xl font-extrabold tracking-tight">G-Lifter Solution</span>
+            </div>
+            
+            <div class="hidden md:flex gap-10 text-sm font-bold text-gray-500 items-center h-full">
+                <a href="#hero" class="hover:text-black transition-colors h-full flex items-center">서비스 소개</a>
+                
+                <!-- 도입 배경 대분류 (Dropdown) -->
+                <div class="relative group h-full flex items-center cursor-pointer">
+                    <span class="flex items-center gap-1 hover:text-black transition-colors">
+                        도입 배경
+                        <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-hover:rotate-180"></i>
+                    </span>
+                    
+                    <!-- Dropdown Content -->
+                    <div class="dropdown-menu absolute top-full left-1/2 -translate-x-1/2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50">
+                        <a href="#slide10" class="block px-5 py-3 text-sm text-gray-600 hover:bg-slate-50 hover:text-[#0033a0] font-bold transition-colors">구조적 원인</a>
+                        <a href="#slide11" class="block px-5 py-3 text-sm text-gray-600 hover:bg-slate-50 hover:text-[#0033a0] font-bold transition-colors">문제 정의</a>
+                        <a href="#slide13" class="block px-5 py-3 text-sm text-gray-600 hover:bg-slate-50 hover:text-[#0033a0] font-bold transition-colors">솔루션 Summary</a>
+                        <a href="#slide14" class="block px-5 py-3 text-sm text-gray-600 hover:bg-slate-50 hover:text-[#0033a0] font-bold transition-colors">실현 가능성 검증</a>
+                        <a href="#slide15" class="block px-5 py-3 text-sm text-gray-600 hover:bg-slate-50 hover:text-[#0033a0] font-bold transition-colors">시뮬레이션</a>
+                        <a href="#placement-plan" class="block px-5 py-3 text-sm text-gray-600 hover:bg-slate-50 hover:text-[#0033a0] font-bold transition-colors">왜 G-Lifter Solution인가?</a>
+                        <a href="#expected-effects" class="block px-5 py-3 text-sm text-gray-600 hover:bg-slate-50 hover:text-[#0033a0] font-bold transition-colors">기대효과</a>
+                    </div>
+                </div>
+            </div>
+
+            <a href="./app.html" class="px-6 py-2 bg-black text-white text-sm font-bold rounded hover:bg-gray-800 transition-all shadow-md inline-block">
+                Run System
+            </a>
         </div>
-      </div>
-      <div class="flex-1 overflow-auto custom-scrollbar p-6 flex flex-col items-center justify-center bg-surface-container-low/30">
-        <div class="min-w-[500px] flex flex-col gap-1.5 w-full max-w-3xl">
-          <div id="yard-grid" class="flex flex-col gap-1.5 w-full"></div>
+    </nav>
+
+    <!-- [스크린샷 첫페이지] Hero Section -->
+    <section id="hero" class="pt-32 pb-16 px-6 bg-white">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid lg:grid-cols-2 gap-12 items-center mb-16">
+                <!-- Left Text Content -->
+                <div>
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-600 mb-6 shadow-sm">
+                        <span class="relative flex h-2 w-2">
+                            <span class="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                        </span>
+                        LIVE TERMINAL MONITORING
+                    </div>
+                    <h1 class="font-black leading-[1.1] mb-6 tracking-tight">
+                        <!-- 콜론 제거 완료 -->
+                        <span class="text-5xl lg:text-7xl text-[#0033a0] block mb-3 drop-shadow-sm">
+                            G-Lifter Solution
+                        </span>
+                        <span class="text-3xl lg:text-4xl text-gray-900 block">
+                            RORO 터미널 실시간
+                        </span>
+                        <span class="text-3xl lg:text-4xl text-gray-400 font-medium block mt-1">
+                            자동차 전용 크레인 제어 시스템
+                        </span>
+                    </h1>
+                    <p class="text-lg text-gray-600 mb-10 leading-relaxed font-medium">
+                        수직하역 크레인 G-Lifter 운영 최적화 및 셔플링 핫스팟 예측 솔루션으로<br>현대글로비스 자동차 터미널의 하역지연을 방지하고 차량 회전율을 극대화합니다.
+                    </p>
+                    <div class="flex flex-wrap gap-4">
+                        <!-- 운용 가이드 다운로드 버튼 삭제 완료 -->
+                        <a href="./app.html" class="px-8 py-4 bg-black text-white font-bold rounded hover:bg-gray-800 transition-all text-sm shadow-md inline-block">
+                            Run System
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Right 3D Visual Mockup -->
+                <div class="relative transform lg:scale-105 transition-transform duration-500 z-10">
+                    <div class="glass-card rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] overflow-hidden border border-gray-200">
+                        <div id="hero-3d-wrapper" class="w-full">
+                            <div id="hero-3d-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div> 
+
+            <!-- Summary Icons -->
+            <div class="grid lg:grid-cols-3 gap-6 relative z-20">
+                <div class="flex gap-4 p-6 border border-gray-200 bg-white rounded-xl shadow-sm">
+                    <div class="w-12 h-12 shrink-0 bg-slate-50 rounded-full flex items-center justify-center border border-gray-100">
+                        <i data-lucide="map-pin" class="w-5 h-5 text-gray-700"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-black text-gray-900 mb-1 text-lg">Where</h4>
+                        <p class="text-sm text-gray-600 font-medium leading-snug">
+                            필라델피아(Southport) 등 글로벌 완성차 항만 야적장 및 중앙 통제실
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex gap-4 p-6 border border-gray-200 bg-white rounded-xl shadow-sm">
+                    <div class="w-12 h-12 shrink-0 bg-slate-50 rounded-full flex items-center justify-center border border-gray-100">
+                        <i data-lucide="users" class="w-5 h-5 text-gray-700"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-black text-gray-900 mb-1 text-lg">Who</h4>
+                        <p class="text-sm text-gray-600 font-medium leading-snug">
+                            현대글로비스 RORO 터미널 관리자 및 차량 출고 스케줄러
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex gap-4 p-6 border border-gray-200 bg-white rounded-xl shadow-sm">
+                    <div class="w-12 h-12 shrink-0 bg-slate-50 rounded-full flex items-center justify-center border border-gray-100">
+                        <i data-lucide="zap" class="w-5 h-5 text-gray-700"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-black text-gray-900 mb-1 text-lg">How</h4>
+                        <p class="text-sm text-gray-600 font-medium leading-snug">
+                            Excel 하역 데이터를 기반으로 차량 재배치 다빈도 발생 구역 결정 및 G-Lifter 최적 배치
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
-        <p class="text-xs text-on-surface-variant mt-6 italic">* 셀을 클릭하여 상세 상태를 확인하세요.</p>
-        <div class="w-full max-w-3xl mt-4">
-          <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-2">위성 매핑 (실제 항만)</h4>
-          <svg id="satellite-view" viewBox="0 0 627 528" style="width:100%;height:auto;background:#0f172a;border-radius:10px"></svg>
-        </div>
-      </div>
     </section>
 
-    <!-- AI Analysis Briefing -->
-    <section class="bg-primary-container text-white rounded-xl flex flex-col overflow-hidden shadow-md h-full relative">
-      <!-- Default Briefing -->
-      <div class="flex flex-col h-full absolute inset-0 bg-primary-container" id="ai-briefing-default">
-        <div class="p-4 border-b border-white/10 flex items-center gap-2">
-          <i class="ri-robot-2-line text-primary-fixed-dim"></i>
-          <h3 class="font-bold">AI 의사결정 브리핑</h3>
-          <span id="sim-progress" class="ml-auto text-[10px] text-white/60">출고 실행 대기 중</span>
-        </div>
-        <div class="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5 text-base">
-          <div class="space-y-1.5">
-            <span class="text-xs text-white/60 font-semibold uppercase tracking-wider">진단 (Diagnosis)</span>
-            <p id="ai-diagnosis" class="text-[21px] text-white/90 leading-relaxed">야드 엑셀을 업로드하면 AI 분석이 표시됩니다.</p>
-          </div>
-          <div class="space-y-1.5">
-            <span class="text-xs text-white/60 font-semibold uppercase tracking-wider">원인 (Cause)</span>
-            <p id="ai-cell-analysis" class="text-[21px] text-white/90 leading-relaxed">—</p>
-          </div>
-          <div class="space-y-1.5">
-            <span class="text-xs text-white/60 font-semibold uppercase tracking-wider">예측 (Prediction)</span>
-            <p id="ai-prediction" class="text-[21px] text-white/90 leading-relaxed">—</p>
-          </div>
-          <div class="bg-white/10 p-4 rounded-lg border border-white/5 mt-auto">
-            <span class="text-xs text-primary-fixed-dim font-semibold flex items-center gap-1.5 mb-2"><i class="ri-lightbulb-flash-line text-lg"></i> 추천 (Recommendation)</span>
-            <p id="ai-recommendation" class="text-[21px] text-white/80 leading-relaxed">—</p>
-          </div>
-          <p id="verdict-text" class="text-sm text-white/70 leading-relaxed"></p>
-        </div>
-        <div class="p-3 bg-black/20 border-t border-white/10 flex justify-between items-center text-xs">
-          <span class="text-white/60">해소 <span id="ai-resolved" class="text-status-success font-bold">0</span>건 · 잔여 <span id="ai-pending" class="font-bold">0</span>건</span>
-          <span class="text-white/50">Direct <span id="ai-direct" class="font-bold">0</span>대 · 이동 <span id="ai-moves" class="font-bold">0</span>회</span>
-          <span class="text-white/50"><i class="ri-cpu-line"></i> G-Logic v2.4</span>
-        </div>
-      </div>
-      <!-- Detailed Cell Analysis (Hidden by default) -->
-      <div class="flex flex-col h-full absolute inset-0 bg-primary-container hidden" id="ai-briefing-detail">
-        <div class="p-4 border-b border-white/10 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <i class="ri-search-eye-line text-status-alert"></i>
-            <h3 class="font-bold">셀 상세 분석: <span class="text-primary-fixed-dim font-mono" id="detail-cell-id">—</span></h3>
-          </div>
-          <div class="flex items-center gap-2">
-            <button id="btn-export" class="flex items-center gap-2 px-3 py-2 bg-primary-container hover:opacity-90 text-white rounded-lg text-xs font-bold transition-opacity shadow-md border border-white/10"><span class="material-symbols-outlined text-lg">download</span> 결과 다운로드</button>
-            <button class="text-white/80 hover:text-white" onclick="hideCellDetails()"><span class="material-symbols-outlined">arrow_back</span></button>
-          </div>
-        </div>
-        <div class="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5 text-base">
-          <div class="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-3">
-            <i class="ri-error-warning-fill text-status-alert mt-0.5"></i>
-            <div>
-              <h4 class="text-status-alert font-medium mb-1" id="detail-depth">—</h4>
-              <p id="detail-msg" class="text-white/80 text-xs">—</p>
+    <!-- [10P] 자동차 항만 정체의 구조적 원인 -->
+    <section id="slide10" class="py-20 bg-slate-50 border-t border-gray-200 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="mb-12 flex flex-col md:flex-row md:items-end justify-between border-b-2 border-black pb-4">
+                <h2 class="text-3xl lg:text-4xl font-extrabold text-[#0033a0] tracking-tight">
+                    자동차 항만 정체의 구조적 원인
+                </h2>
+                <span class="text-gray-500 font-bold mt-2 md:mt-0"></span>
             </div>
-          </div>
-          <div class="space-y-4">
-            <div>
-              <span class="text-xs text-white/60 font-semibold mb-1 block">차량 구성</span>
-              <div class="flex justify-between items-center text-sm border-b border-white/10 pb-2"><span class="text-white/80">MTO (주문 생산)</span><span class="font-medium text-white" id="detail-mto">0대</span></div>
-              <div class="flex justify-between items-center text-sm border-b border-white/10 py-2"><span class="text-white/80">MTS (재고 생산)</span><span class="font-medium text-white" id="detail-mts">0대</span></div>
-              <div class="flex justify-between items-center text-sm border-b border-white/10 py-2"><span class="text-white/80">셔플링 (blocking)</span><span class="font-medium text-status-alert" id="detail-shuffle">0대</span></div>
-              <div class="flex justify-between items-center text-sm py-2"><span class="text-white/80">G-Lifter 배치</span><span class="font-medium text-status-success" id="detail-glifter">—</span></div>
+
+            <div class="border border-gray-300 rounded-xl p-8 lg:p-12 bg-white shadow-sm relative mt-12">
+                <div class="absolute -top-5 left-1/2 -translate-x-1/2 bg-[#0033a0] text-white px-8 py-2 font-bold shadow-md">
+                    구조적 제약
+                </div>
+                
+                <div class="grid lg:grid-cols-3 gap-8 items-center mt-6">
+                    <!-- Left -->
+                    <div class="flex flex-col gap-6 w-full">
+                        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                            <h4 class="font-extrabold text-gray-900 mb-2 text-lg">수직 적재 불가 : 평면 적재</h4>
+                            <p class="text-sm text-gray-600 leading-relaxed font-medium">컨테이너와 달리 <span class="font-bold text-[#0033a0]">평면 주차만 가능</span>하여 공간 효율 및 이동 동선 제약 극대화</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                            <h4 class="font-extrabold text-gray-900 mb-2 text-lg">LIFO의 역설</h4>
+                            <p class="text-sm text-gray-600 leading-relaxed font-medium">나중에 들어온 차가 출구를 막는<br/>후입선출(LIFO) 구조</p>
+                        </div>
+                    </div>
+                    <!-- Center Image Placeholder -->
+                    <div class="w-full relative px-2">
+                        <div class="aspect-square rounded-xl overflow-hidden shadow-md border border-gray-200 bg-gray-100">
+                            <img src="IMG_1.jpg" alt="자동차 항만 전경" class="w-full h-full object-cover">
+                        </div>
+                    </div>
+                    <!-- Right -->
+                    <div class="flex flex-col gap-6 w-full">
+                        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                            <h4 class="font-extrabold text-gray-900 mb-2 text-lg">단일 야드 내 다수 브랜드 혼재</h4>
+                            <p class="text-sm text-gray-600 leading-relaxed font-medium">한정된 야드 내 다양한 화주(OEM) 및 브랜드 물량 뒤섞여 출고 우선순위 관리 극도로 복잡</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                            <h4 class="font-extrabold text-gray-900 mb-2 text-lg">부가가치 공정(PDI)의 정체</h4>
+                            <p class="text-sm text-gray-600 leading-relaxed font-medium">액세서리 장착 및 검수 등 공정이 항만 내 차량 평균 체류 시간 가중, 하역 회전율 급락</p>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div>
-              <span class="text-xs text-white/60 font-semibold mb-1 block">해결 방안</span>
-              <p id="detail-plan" class="text-white/90 text-sm leading-relaxed">—</p>
+
+            <div class="mt-12 text-center">
+                <p class="text-gray-800 font-bold mb-6 flex items-center justify-center gap-2 text-[15px]">
+                    <span class="text-yellow-500 text-xl">⚠️</span> 자동차 물류는 야적 공간과 순차적 출고가 생명이기에, 일반 컨테이너보다 하역 작업 및 체선 리스크 관리가 훨씬 복잡하고 중요함
+                </p>
+                <div class="inline-block bg-slate-50 border border-gray-200 px-12 py-4 shadow-sm">
+                    <p class="text-gray-900 font-extrabold text-lg">
+                        But, 구조적 제약으로 인해 차량 출고를 위한 <span class="text-[#0033a0]">"차량 재배치" 발생</span>
+                    </p>
+                </div>
             </div>
-          </div>
-          <div id="cell-result-log" class="bg-white/10 rounded-lg p-3 text-xs text-white/70 overflow-y-auto custom-scrollbar max-h-32">셀별 해소 결과: 출고 실행 후 표시됩니다.</div>
         </div>
-      </div>
     </section>
-  </div>
 
-  <!-- Bottom Section: Heatmaps -->
-  <section class="bg-white rounded-xl border border-border-subtle shadow-sm p-4 flex flex-col gap-4">
-    <div class="flex justify-between items-center border-b border-border-subtle pb-3">
-      <h3 class="font-bold text-on-surface flex items-center gap-2"><i class="ri-map-2-line text-primary-container"></i> 야드 셔플링 위험도 변화</h3>
-      <div class="flex items-center gap-4 text-[10px] text-on-surface-variant">
-        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-status-alert"></span> 고위험 (셔플링)</div>
-        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-yellow-400"></span> 중위험 (관찰)</div>
-        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-surface-container-high"></span> 정상</div>
-        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-status-success"></span> 해소/정상</div>
-      </div>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
-      <div class="flex flex-col items-center">
-        <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-6">BEFORE DISPATCH (RISK ASSESSMENT)</h4>
-        <div class="w-full overflow-x-auto custom-scrollbar"><div id="grid-before" class="min-w-[320px] flex flex-col gap-1"></div></div>
-      </div>
-      <div class="flex flex-col items-center">
-        <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-6">AFTER DISPATCH (RESOLUTION STATUS)</h4>
-        <div class="w-full overflow-x-auto custom-scrollbar"><div id="grid-after" class="min-w-[320px] flex flex-col gap-1"></div></div>
-      </div>
-    </div>
-  </section>
+    <!-- [11P] 셔플링 문제 정의 (작업 흐름, 비용) -->
+    <section id="slide11" class="py-20 bg-white border-t border-gray-200 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="mb-12 flex flex-col md:flex-row md:items-end justify-between border-b-2 border-black pb-4">
+                <h2 class="text-3xl lg:text-4xl font-extrabold text-[#0033a0] tracking-tight">
+                    셔플링 문제 정의
+                </h2>
+                <span class="text-gray-500 font-bold mt-2 md:mt-0"></span>
+            </div>
 
-  <!-- Operational Performance Dashboard -->
-  <section class="bg-white rounded-xl border border-border-subtle shadow-sm flex flex-col overflow-hidden">
-    <div class="p-4 border-b border-border-subtle bg-white flex justify-between items-center">
-      <h3 class="font-bold text-on-surface flex items-center gap-2"><i class="ri-dashboard-3-line text-primary-container"></i> 운영 성과 대시보드</h3>
-      <div class="flex gap-4 items-center">
-        <div class="flex items-center gap-2"><span class="text-xs text-on-surface-variant">셔플링 해소 완료</span><span class="bg-primary-container text-white px-2 py-0.5 rounded-full text-xs font-bold"><span id="ai-resolved-bar">0</span>건</span></div>
-        <div class="flex items-center gap-2"><span class="text-xs text-on-surface-variant">Direct 출고율</span><span id="kpi-direct-rate" class="text-xs font-bold text-status-success">0%</span></div>
-        <button id="btn-export" class="flex items-center gap-2 px-5 py-2.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-sm font-bold transition-opacity shadow-md ml-4 border border-white/10"><span class="material-symbols-outlined text-lg">download</span> 결과 다운로드</button>
-      </div>
-    </div>
-    <div class="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border-subtle">
-      <div class="p-6 flex flex-col justify-center gap-6">
-        <div>
-          <div class="flex justify-between items-end mb-2"><span class="text-sm font-semibold text-on-surface">Direct 출고율 개선</span><span class="text-xl font-bold text-primary-container" id="kpi-direct-rate2">0%</span></div>
-          <div class="bg-surface-container-high rounded-full h-2.5 w-full"><div id="prog-direct" class="bg-primary-container h-2.5 rounded-full" style="width:0%"></div></div>
-          <p class="text-xs text-on-surface-variant mt-2 text-right">목표: 100%</p>
+            <div class="mb-12 flex items-center justify-center text-center">
+                <h3 class="text-2xl font-bold text-[#0033a0] flex flex-col md:flex-row items-center gap-3">
+                    셔플링(Shuffling)
+                    <span class="text-gray-800 text-xl font-medium">: 밀집 주차된 야적장에서 원하는 차량 한 대를 추출하기 위해 발생하는 차량 재배치</span>
+                </h3>
+            </div>
+
+            <div class="grid lg:grid-cols-3 gap-8 items-stretch">
+                <!-- Col 1 -->
+                <div class="border border-gray-200 rounded-xl p-6 bg-slate-50 flex flex-col">
+                    <h4 class="font-bold text-lg mb-4 flex items-center gap-2 text-gray-900">
+                        <i data-lucide="check-circle-2" class="text-[#0033a0] fill-[#0033a0] text-white"></i> 문제 상황 : 3번째 열 (중심부) 차량 추출
+                    </h4>
+                    <p class="text-sm text-gray-600 font-medium mb-4">타겟 차량 위치가 중심부일수록 방해 차량 이적 수 증가<br>➔ 셔플링 비용 증가</p>
+                    
+                    <div class="w-full flex-1 rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-[#1a233a]">
+                        <video src="IMG_2.mp4" autoplay muted loop playsinline class="w-full h-full object-cover"></video>
+                    </div>
+                </div>
+
+                <!-- Col 2 -->
+                <div class="border border-gray-200 rounded-xl p-6 bg-white relative">
+                    <h4 class="font-bold text-lg mb-6 flex items-center gap-2 text-gray-900">
+                        <i data-lucide="check-circle-2" class="text-[#0033a0] fill-[#0033a0] text-white"></i> 셔플링 1회 작업 흐름과 소요 시간
+                    </h4>
+                    
+                    <div class="flex flex-col items-center">
+                        <div class="border border-gray-300 rounded px-6 py-3 w-full max-w-[280px] text-center relative bg-white">
+                            <span class="font-bold text-[#0033a0] text-lg">작업자 이동</span>
+                            <span class="absolute -right-3 -top-3 bg-[#0033a0] text-white px-2 py-1 rounded font-bold text-sm">~2분</span>
+                            <p class="text-sm text-gray-600 mt-1">현재 위치 ➔ 대상 차량</p>
+                        </div>
+                        <i data-lucide="arrow-down" class="my-2 text-gray-400"></i>
+                        
+                        <div class="border border-gray-300 rounded px-6 py-3 w-full max-w-[280px] text-center relative bg-white">
+                            <span class="font-bold text-[#0033a0] text-lg">차량 이동</span>
+                            <span class="absolute -right-3 -top-3 bg-[#0033a0] text-white px-2 py-1 rounded font-bold text-sm">~5분</span>
+                            <p class="text-sm text-gray-600 mt-1">시동 ➔ 임시 위치 운전 ➔ 주차</p>
+                        </div>
+                        <i data-lucide="arrow-down" class="my-2 text-gray-400"></i>
+                        
+                        <div class="border border-gray-300 rounded px-6 py-3 w-full max-w-[280px] text-center relative bg-white">
+                            <span class="font-bold text-[#0033a0] text-lg">작업자 복귀</span>
+                            <span class="absolute -right-3 -top-3 bg-[#0033a0] text-white px-2 py-1 rounded font-bold text-sm">~2분</span>
+                            <p class="text-sm text-gray-600 mt-1">임시 위치 ➔ 기존 작업 위치</p>
+                        </div>
+                        
+                        <div class="mt-6 border-2 border-gray-800 rounded-lg px-6 py-4 w-full text-center bg-gray-50">
+                            <p class="font-black text-gray-900 text-lg">작업 총계 : 약 10분</p>
+                            <p class="text-sm text-gray-600 font-bold mt-1">막힌 차 2대 이동 ➔ 타겟 추출 ➔ 원위치</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Col 3 -->
+                <div class="border border-gray-200 rounded-xl p-6 bg-slate-50 flex flex-col">
+                    <h4 class="font-bold text-lg mb-4 flex items-center gap-2 text-gray-900">
+                        <i data-lucide="check-circle-2" class="text-[#0033a0] fill-[#0033a0] text-white"></i> 셔플링 발생으로 인한 선박의 손실 비용
+                    </h4>
+                    
+                    <p class="text-[11px] text-gray-500 mb-4 leading-tight">*3번째 열 차량의 출고 요청이 들어왔을 때 그 중 30%만 실제 셔플링 발생 가정</p>
+                    
+                    <div class="overflow-x-auto w-full mb-4">
+                        <table class="w-full custom-table text-sm bg-white">
+                            <thead>
+                                <tr>
+                                    <th>차량의<br>야드 점유율</th>
+                                    <th>출고 요청</th>
+                                    <th>셔플링<br>발생 횟수</th>
+                                    <th>총 손실<br>시간</th>
+                                    <th>비용 환산</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-700">
+                                <tr>
+                                    <td class="font-bold">50%</td>
+                                    <td>29회</td>
+                                    <td>9회</td>
+                                    <td>90분</td>
+                                    <td>524만원</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-bold">70%</td>
+                                    <td>43회</td>
+                                    <td>13회</td>
+                                    <td>130분</td>
+                                    <td>758만원</td>
+                                </tr>
+                                <tr class="highlight-row">
+                                    <td class="text-black">100%</td>
+                                    <td class="text-black">57회</td>
+                                    <td class="text-black text-base">17회</td>
+                                    <td class="text-black text-base">170분</td>
+                                    <td class="text-black text-base">991만원</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-auto">
+                        <p class="text-center font-bold text-gray-800 text-sm mb-3">선박 대기 비용 : 하루 $60,000 = 시간당 시간당 약 350만원</p>
+                        <div class="bg-[#0033a0] text-white rounded-lg p-4 text-center shadow-md">
+                            <p class="font-bold text-sm lg:text-base">야드가 포화상태일 때 셔플링으로 인한</p>
+                            <p class="font-black text-lg lg:text-xl mt-1">손실 시간: 170분, 비용: 991만원</p>
+                        </div>
+                        <p class="text-right text-xs text-gray-400 mt-2 font-medium">필라델피아 southport의 배치 Block 1개 기준</p>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div>
-          <div class="flex justify-between items-end mb-2"><span class="text-sm font-semibold text-on-surface">셔플링 해소 진척도</span><span class="text-xl font-bold text-primary-container"><span id="ai-resolved-bar2">0</span>/<span id="ai-shuffle-total">0</span>건</span></div>
-          <div class="bg-surface-container-high rounded-full h-2.5 w-full"><div id="ai-progress" class="bg-status-success h-2.5 rounded-full" style="width:0%"></div></div>
-          <p class="text-xs text-on-surface-variant mt-2 text-right">해소율 <span id="ai-progress-label">0%</span> · 잔여: <span id="ai-pending-bar">0</span>건</p>
-        </div>
-        <div class="flex items-center justify-between text-xs text-on-surface-variant"><span>G-Lifter vs 인간 시간 비교</span><span class="font-bold text-on-surface" id="kpi-compare">—</span></div>
-      </div>
-      <div class="p-6 flex flex-col gap-3">
-        <div id="gl-board" class="bg-surface-gray rounded-lg p-3 text-xs text-on-surface-variant">G-Lifter 이동 현황: 출고 실행 후 표시됩니다.</div>
-        <div id="log" class="bg-[#0f172a] text-[#10b981] rounded-lg p-3 font-mono text-[11px] leading-relaxed overflow-y-auto custom-scrollbar h-32">&gt; 야드 엑셀을 먼저 업로드하세요.</div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- G-Lifter Timeline -->
-  <section class="bg-white rounded-xl border border-border-subtle shadow-sm flex flex-col overflow-hidden">
-    <div class="px-4 py-3 border-b border-border-subtle bg-surface-container-low/30 flex items-center gap-2">
-      <span class="material-symbols-outlined text-primary-container text-lg">history</span>
-      <h4 class="text-sm font-bold text-on-surface">G-Lifter 타임라인</h4>
-      <button id="btn-undo" class="ml-auto flex items-center gap-2 px-3 py-1.5 bg-amber-500 hover:opacity-90 text-white rounded-lg text-xs font-bold transition-opacity" disabled><span class="material-symbols-outlined text-sm">undo</span> 출고 되돌리기</button>
-    </div>
-    <div class="overflow-y-auto custom-scrollbar h-64">
-      <table class="w-full text-left text-sm whitespace-nowrap">
-        <thead class="bg-surface-container-low border-b border-border-subtle text-on-surface-variant sticky top-0">
-          <tr><th class="px-4 py-2 font-medium">시간</th><th class="px-4 py-2 font-medium">기기</th><th class="px-4 py-2 font-medium">작업 구분</th><th class="px-4 py-2 font-medium">출발</th><th class="px-4 py-2 font-medium">도착</th><th class="px-4 py-2 font-medium">상태</th></tr>
-        </thead>
-        <tbody id="gl-timeline" class="divide-y divide-border-subtle text-on-surface"><tr><td colspan="6" class="px-4 py-3 text-center text-xs text-on-surface-variant">출고 실행 후 표시됩니다</td></tr></tbody>
-      </table>
-    </div>
-    <div class="p-3 bg-white border-t border-border-subtle flex justify-between items-center text-xs text-on-surface-variant">
-      <span>총 <span id="gl-timeline-count">0</span>건의 이동 기록</span>
-      <button class="text-primary-container hover:underline font-medium" onclick="document.getElementById('timeline-modal').classList.remove('hidden')">자세히 보기</button>
-    </div>
-  </section>
-</main>
-<!-- END: Main Content -->
+    <!-- [12P] 셔플링 문제 정의 (도미노, 비생산적 이동, 품질 리스크) -->
+    <section id="slide12" class="py-20 bg-slate-50 border-t border-gray-200 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col lg:flex-row items-center justify-center gap-12 mt-8">
+                
+                <!-- Left: 야적장 포화 도미노 -->
+                <div class="w-full lg:w-1/3 flex flex-col items-center">
+                    <div class="border border-gray-200 bg-white rounded-xl shadow-sm w-full p-6 text-center">
+                        <div class="inline-block bg-white border border-gray-200 rounded-full px-6 py-1 font-bold text-gray-800 mb-6 -mt-10 shadow-sm">
+                            야적장 포화 도미노
+                        </div>
+                        <div class="flex items-start gap-3 mb-6">
+                            <i data-lucide="check-circle-2" class="text-[#0033a0] fill-[#0033a0] text-white shrink-0 mt-1"></i>
+                            <div class="text-left bg-slate-50 p-4 rounded-lg w-full">
+                                <p class="font-extrabold text-gray-900 text-lg text-center leading-snug">야적장 점유율 85% 도달 시<br>터미널 생산성 급락</p>
+                                <p class="text-[#0033a0] font-black text-2xl text-center my-3">25~30% ↓</p>
+                                <p class="text-sm text-gray-600 font-medium text-center">셔플링 횟수 기하급수적 상승<br>➔ 처리량 감소 & 작업 시간 지연</p>
+                            </div>
+                        </div>
+                        <div class="bg-[#0033a0] text-white rounded-lg p-4 w-full shadow-md">
+                            <p class="font-bold text-sm">야적장은 100% 가득 차기 훨씬 이전부터</p>
+                            <p class="font-extrabold text-base">'셔플링' 으로 인해 마비 상태에 진입</p>
+                        </div>
+                    </div>
+                </div>
 
-<!-- Export Modal -->
-<div id="export-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden">
-  <div class="bg-white w-full max-w-2xl rounded-xl shadow-xl border border-border-subtle overflow-hidden flex flex-col max-h-[85vh]">
-    <div class="p-4 border-b border-border-subtle flex justify-between items-center bg-primary-container text-white">
-      <h3 class="font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span> 분석 결과 다운로드</h3>
-      <button class="text-white/80 hover:text-white" onclick="document.getElementById('export-modal').classList.add('hidden')"><span class="material-symbols-outlined">close</span></button>
-    </div>
-    <div class="p-5 space-y-4 overflow-y-auto custom-scrollbar">
-      <a id="export-link" href="#" download="G-Lifter_분석결과.csv" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-container hover:opacity-90 text-white rounded-lg text-sm font-bold transition-opacity shadow-md">
-        <span class="material-symbols-outlined text-lg">download</span> CSV 파일 다운로드
-      </a>
-      <div>
-        <div class="flex justify-between items-center mb-1">
-          <span class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">CSV 미리보기</span>
-          <button id="btn-copy-csv" class="text-xs text-primary-container hover:underline font-medium">전체 복사</button>
-        </div>
-        <textarea id="export-preview" readonly rows="12" class="w-full border border-border-subtle rounded-lg p-3 text-[11px] font-mono bg-surface-gray focus:outline-none"></textarea>
-      </div>
-    </div>
-  </div>
-</div>
+                <!-- Center -->
+                <div class="w-full lg:w-1/3 flex flex-col items-center">
+                    <div class="text-center w-full">
+                        <div class="inline-flex items-center gap-2 text-red-600 font-black text-3xl mb-4">
+                            <i data-lucide="alert-triangle" class="w-8 h-8"></i> 셔플링
+                        </div>
+                        <div class="w-64 h-64 rounded-full overflow-hidden border-8 border-white shadow-xl mx-auto bg-gray-100">
+                            <img src="IMG_3.jpg" alt="항만 포화 전경" class="w-full h-full object-cover">
+                        </div>
+                        <p class="text-gray-500 font-bold text-sm mt-4">현대글로비스 필라델피아 항만</p>
+                    </div>
+                    
+                    <i data-lucide="arrow-down" class="my-6 text-[#0033a0] w-8 h-8 font-bold"></i>
 
-<!-- Settings Modal -->
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden" id="operational-settings-modal">
-  <div class="bg-white w-[460px] rounded-xl shadow-xl border border-border-subtle overflow-hidden flex flex-col max-h-[90vh]">
-    <div class="p-4 border-b border-border-subtle flex justify-between items-center bg-surface-container-low">
-      <h3 class="font-bold text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-primary-container">settings</span> 데이터 소스 업로드 및 제어</h3>
-      <button class="text-on-surface-variant hover:text-on-surface" onclick="document.getElementById('operational-settings-modal').classList.add('hidden')"><span class="material-symbols-outlined">close</span></button>
-    </div>
-    <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-      <div class="space-y-3">
-        <h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">데이터 소스</h4>
-        <div class="grid gap-3">
-          <div id="upload-yard-box" class="border-2 border-dashed border-outline-variant rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-low cursor-pointer transition-colors">
-            <span class="material-symbols-outlined text-3xl text-outline">upload_file</span>
-            <div class="text-center"><p class="text-sm font-semibold text-on-surface">야드 마스터 엑셀 업로드</p><p id="yard-info" class="text-[10px] text-on-surface-variant">야드 엑셀을 업로드하세요</p></div>
-          </div>
-          <input type="file" id="file-yard" accept=".xlsx,.csv" class="hidden">
-          <div id="upload-dispatch-box" class="border-2 border-dashed border-outline-variant rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:bg-surface-container-low cursor-pointer transition-colors">
-            <span class="material-symbols-outlined text-3xl text-outline">description</span>
-            <div class="text-center"><p class="text-sm font-semibold text-on-surface">번호판 CSV 업로드</p><p class="text-[10px] text-on-surface-variant">plate_no 컬럼 또는 한 줄 1개 · 최대 5,000개</p></div>
-          </div>
-          <input type="file" id="file-dispatch" accept=".csv,.txt" class="hidden">
-        </div>
-      </div>
-      <div class="space-y-4">
-        <h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">출고 대상 (번호판)</h4>
-        <textarea id="plate-input" rows="4" placeholder="78허 0724&#10;24머 3116&#10;05부 7036&#10;..." class="w-full border border-border-subtle rounded-lg p-3 text-xs font-mono bg-surface-gray focus:outline-none focus:ring-2 focus:ring-primary-container"></textarea>
-      </div>
-      <div class="space-y-4">
-        <h4 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">시뮬레이션 파라미터</h4>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs text-on-surface-variant mb-1">G-Lifter 대수</label>
-            <input type="number" id="glifter-count" min="1" max="110" value="3" class="w-full border border-border-subtle rounded-lg px-3 py-2 text-sm font-semibold bg-surface-gray focus:outline-none focus:ring-2 focus:ring-primary-container">
-          </div>
-          <div>
-            <label class="block text-xs text-on-surface-variant mb-1">단계당 처리 대수</label>
-            <select id="sim-speed" class="w-full border border-border-subtle rounded-lg px-3 py-2 text-sm font-semibold bg-surface-gray focus:outline-none focus:ring-2 focus:ring-primary-container">
-              <option value="200" selected>최소 (200대/단계)</option>
-              <option value="500">보통 (500대/단계)</option>
-              <option value="1000">빠르게 (1000대/단계)</option>
-              <option value="5000">일괄</option>
-            </select>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <button id="btn-run" class="flex-1 bg-primary-container hover:opacity-90 text-white rounded-lg py-2.5 text-sm font-bold transition-opacity">분석 시작 (단계 진행)</button>
-          <button id="btn-undo" class="flex-1 bg-amber-500 hover:opacity-90 text-white rounded-lg py-2.5 text-sm font-bold transition-opacity" disabled>출고 되돌리기</button>
-        </div>
-        <button id="btn-reset" class="w-full bg-surface-container hover:bg-surface-container-high text-on-surface rounded-lg py-2 text-sm font-medium transition-colors border border-border-subtle">초기화</button>
-      </div>
-    </div>
-  </div>
-</div>
+                    <div class="border border-gray-200 bg-white rounded-xl shadow-sm w-full p-6 text-center">
+                        <div class="inline-block bg-white border border-gray-200 rounded-full px-6 py-1 font-bold text-gray-800 mb-6 -mt-10 shadow-sm">
+                            비생산적 이동
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <i data-lucide="check-circle-2" class="text-[#0033a0] fill-[#0033a0] text-white shrink-0 mt-1"></i>
+                            <div class="text-left w-full">
+                                <p class="font-extrabold text-gray-900 text-base text-center mb-2">단순 차 옮기기에 소모되는 인력 비율</p>
+                                <p class="text-[#0033a0] font-black text-2xl text-center mb-3">30~40%</p>
+                                <p class="text-sm text-gray-600 font-medium text-center leading-relaxed">숙련된 하역 노동자들이 새로운 차를 내리는 대신,<br>안쪽 차량 추출에 매몰</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-<!-- Timeline Modal -->
-<div id="timeline-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden">
-  <div class="bg-white w-full max-w-3xl rounded-xl shadow-xl border border-border-subtle overflow-hidden flex flex-col">
-    <div class="p-4 border-b border-border-subtle flex justify-between items-center bg-primary-container text-white">
-      <h3 class="font-bold flex items-center gap-2"><span class="material-symbols-outlined">history</span> G-Lifter 전체 운영 타임라인</h3>
-      <button class="text-white/80 hover:text-white" onclick="document.getElementById('timeline-modal').classList.add('hidden')"><span class="material-symbols-outlined">close</span></button>
-    </div>
-    <div class="overflow-y-auto max-h-[70vh] custom-scrollbar">
-      <table class="w-full text-left text-sm whitespace-nowrap">
-        <thead class="bg-surface-container-low border-b border-border-subtle text-on-surface-variant sticky top-0">
-          <tr><th class="px-6 py-3 font-medium">시간</th><th class="px-6 py-3 font-medium">기기</th><th class="px-6 py-3 font-medium">작업 구분</th><th class="px-6 py-3 font-medium">출발</th><th class="px-6 py-3 font-medium">도착</th><th class="px-6 py-3 font-medium">상태</th></tr>
-        </thead>
-        <tbody id="gl-timeline-full" class="divide-y divide-border-subtle text-on-surface"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
+                <!-- Right: 품질 리스크 -->
+                <div class="w-full lg:w-1/3 flex flex-col items-center">
+                    <div class="border border-gray-200 bg-white rounded-xl shadow-sm w-full p-6 text-center h-full flex flex-col">
+                        <div class="inline-block bg-white border border-gray-200 rounded-full px-6 py-1 font-bold text-gray-800 mb-6 -mt-10 shadow-sm mx-auto">
+                            품질 리스크
+                        </div>
+                        <div class="flex items-start gap-3 mb-6">
+                            <i data-lucide="check-circle-2" class="text-[#0033a0] fill-[#0033a0] text-white shrink-0 mt-1"></i>
+                            <div class="text-left w-full">
+                                <p class="font-extrabold text-gray-900 text-lg mb-4 text-center">S&D (파손) 리스크</p>
+                                <ul class="text-sm text-gray-600 font-medium space-y-3">
+                                    <li>• 야적장 자동차 사고의 <span class="text-[#0033a0] font-bold">88%는 이동 중</span> 발생</li>
+                                    <li>• 셔플링 = 타겟 차량 1대당 평균 3~5회의 불필요한 추가 이동을 강제함</li>
+                                    <li>➔ <span class="text-[#0033a0] font-bold">클레임 비용</span> 발생 가능성 증대</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="bg-[#0033a0] text-white rounded-lg p-4 w-full shadow-md mt-auto">
+                            <p class="font-bold text-base">셔플링의 누적</p>
+                            <p class="font-extrabold text-lg">= 신차 품질 저하 요인으로 작용</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-<script type="module" src="/src/main.ts"></script>
+    <!-- [13P] Summary (Solution Emphasis) -->
+    <section id="slide13" class="py-24 bg-gradient-to-b from-white to-slate-50 border-t border-gray-200 px-6 relative overflow-hidden">
+        <!-- Background decorative elements -->
+        <div class="absolute top-0 right-0 w-[800px] h-[800px] bg-blue-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+
+        <div class="max-w-7xl mx-auto relative z-10">
+            <h2 class="text-4xl font-black text-[#0033a0] tracking-tight border-b-2 border-black pb-4 mb-16 inline-block w-full max-w-6xl mx-auto block">Summary :</h2>
+            
+            <div class="text-center mb-20 max-w-6xl mx-auto">
+                <p class="text-2xl lg:text-3xl font-black text-gray-900 leading-relaxed tracking-tight">
+                    " 결론적으로 하역 지연 개선의 핵심은 <span class="text-[#0033a0]">
+                        '셔플링 문제 해결'
+                    </span> 에 있습니다 "
+                </p>
+            </div>
+            <!-- Main Content Card -->
+            <div class="max-w-6xl mx-auto bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-gray-100 p-8 lg:p-14">
+                <div class="grid lg:grid-cols-12 gap-12 items-center">
+                    
+                    <!-- Left Content (Text) -->
+                    <div class="lg:col-span-7 flex flex-col h-full justify-center">
+                        <div class="mb-12">
+                            <div class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-50 border border-slate-200 mb-8 shadow-sm">
+                                <span class="text-gray-800 font-black tracking-widest text-sm">[ Solution ]</span>
+                            </div>
+                            
+                            <div class="mb-8">
+                                <h3 class="text-3xl font-black text-gray-900 mb-3 tracking-tight">Shuffling 최소화 :</h3>
+                                <p class="text-lg text-gray-500 font-bold">수동 하역의 한계를 넘는 수직 인양 솔루션</p>
+                            </div>
+
+                            <div class="text-lg font-medium text-gray-700 leading-relaxed">
+                                기존의 평면 이동 방식(Shuffling)에서 탈피한 프로세스 혁신<br>
+                                <span class="text-2xl lg:text-[1.7rem] font-black text-[#0033a0] block my-3 leading-snug">
+                                    자동차 전용 크레인을 활용한 '수직 추출' (G-Lifter)
+                              
+                            </div>
+                        </div>
+
+                        <!-- Bottom Boxes -->
+                        <div class="grid sm:grid-cols-2 gap-5 mt-auto">
+                            <div class="bg-slate-50 rounded-2xl p-6 border border-gray-100 hover:shadow-md transition-shadow">
+                                <h4 class="font-black text-gray-900 text-lg mb-3 flex items-center gap-2">
+                                    <div class="w-2 h-2 bg-[#0033a0] rounded-sm"></div>
+                                    [물리적 혁신]
+                                </h4>
+                                <p class="text-gray-600 font-medium text-sm leading-relaxed">
+                                    : 앞차 이동 없는 'Direct Pick-up'
+                                </p>
+                            </div>
+                            <div class="bg-slate-50 rounded-2xl p-6 border border-gray-100 hover:shadow-md transition-shadow">
+                                <h4 class="font-black text-gray-900 text-lg mb-3 flex items-center gap-2">
+                                    <div class="w-2 h-2 bg-[#0033a0] rounded-sm"></div>
+                                    [공간 최적화]
+                                </h4>
+                                <p class="text-gray-600 font-medium text-sm leading-relaxed">
+                                    : 야적 점유율 90% 이상의 극한 상황에서도 일관된 출고 속도 유지<br>
+                                    
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Content (Video: VID_3) -->
+                    <div class="lg:col-span-5 relative h-full flex items-center justify-center">
+                        <div class="absolute inset-0 bg-gradient-to-tr from-blue-50 to-transparent rounded-[2rem] transform translate-x-4 translate-y-4 -z-10"></div>
+                        <div class="bg-white rounded-[2rem] border border-gray-100 p-8 flex items-center justify-center w-full h-full shadow-lg relative overflow-hidden group">
+                            <!-- Background accent inside image box -->
+                            <div class="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-bl-full -z-10 transition-transform group-hover:scale-110"></div>
+                            
+                            <!-- 크레인 이미지 대신 VID_3.mp4 영상이 무한 반복 재생됩니다 -->
+                            <video src="VID_3.mp4" autoplay muted loop playsinline class="w-full h-auto object-cover rounded-xl drop-shadow-xl transform transition-transform duration-700 group-hover:scale-105 group-hover:-translate-y-2"></video>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- [14P] 실현 가능성 검증 -->
+    <section id="slide14" class="py-24 bg-white border-t border-gray-200 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="mb-12 flex flex-col md:flex-row md:items-end justify-between border-b-2 border-black pb-4">
+                <h2 class="text-3xl lg:text-4xl font-extrabold text-[#0033a0] tracking-tight">
+                    실현 가능성 검증 : 맞춤형 크레인 사양 및 실증
+                </h2>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-10 items-start mt-12">
+                <!-- Left Column (Images & Ref Model) -->
+                <div class="flex flex-col gap-8">
+                    <!-- G-Lifter 예상도 -->
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-900 mb-3">G-Lifter 예상도</h3>
+                        <div class="bg-white border border-gray-300 p-6 rounded-xl shadow-sm flex justify-center items-center h-80">
+                            <img src="IMG_4.jpg" alt="G-Lifter 예상도" class="max-w-full max-h-full object-contain drop-shadow-md">
+                        </div>
+                    </div>
+
+                    <!-- 참고 모델 -->
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-900 mb-3">참고 모델 : Grove GMK3060L-1</h3>
+                        <div class="bg-white border border-gray-300 p-5 rounded-xl shadow-sm flex flex-col md:flex-row gap-6 items-stretch">
+                            <div class="w-full md:w-5/12 flex justify-center items-center bg-slate-50 rounded-lg p-2 border border-gray-100">
+                                <img src="boom.jpg" alt="Grove GMK3060L-1" class="max-w-full max-h-40 object-contain drop-shadow-md">
+                            </div>
+                            <div class="w-full md:w-7/12 flex items-center">
+                                <table class="w-full text-sm border-collapse border border-gray-300 text-center h-full">
+                                    <tbody>
+                                        <tr class="border-b border-gray-300">
+                                            <th class="bg-slate-100 p-2 border-r border-gray-300 font-bold text-gray-700 w-2/5">장비 전폭</th>
+                                            <td class="p-2 font-bold text-gray-900">2.55m</td>
+                                        </tr>
+                                        <tr class="border-b border-gray-300">
+                                            <th class="bg-slate-100 p-2 border-r border-gray-300 font-bold text-gray-700">최대 리치</th>
+                                            <td class="p-2 font-medium text-gray-800">메인 붐 48m</td>
+                                        </tr>
+                                        <tr class="border-b border-gray-300">
+                                            <th class="bg-slate-100 p-2 border-r border-gray-300 font-bold text-gray-700">인양 능력</th>
+                                            <td class="p-2 font-medium text-gray-800">24m지점에서<br>3.5t ~ 4.2t</td>
+                                        </tr>
+                                        <tr>
+                                            <th class="bg-slate-100 p-2 border-r border-gray-300 font-bold text-gray-700">수직 리프팅</th>
+                                            <td class="p-2 font-medium text-gray-800">최대 팁 높이 51m</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column (Specs & Process) -->
+                <div class="flex flex-col gap-10">
+                    <!-- G-Lifter 스펙 -->
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-900 mb-3">Southport auto terminal 오퍼레이션을 고려한 G-Lifter 스펙</h3>
+                        <div class="bg-white border border-gray-300 rounded-xl shadow-sm overflow-hidden">
+                            <table class="w-full text-sm border-collapse text-center">
+                                <tbody>
+                                    <tr class="border-b border-gray-300">
+                                        <th class="bg-slate-100 p-3.5 border-r border-gray-300 font-bold text-gray-700 w-1/4">장비 전폭</th>
+                                        <td class="p-3.5 border-r border-gray-300 font-extrabold text-gray-900 w-1/4">2.5m 내외</td>
+                                        <td class="p-3.5 text-left font-medium text-gray-600">도로 주행 및 통로 진입 가능</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-300">
+                                        <th class="bg-slate-100 p-3.5 border-r border-gray-300 font-bold text-gray-700">최대 리치</th>
+                                        <td class="p-3.5 border-r border-gray-300 font-extrabold text-gray-900">22 ~ 25m</td>
+                                        <td class="p-3.5 text-left font-medium text-gray-600 leading-relaxed">수평 작업 반경18m(3열15m+통로3m)<br>및 안전 인양 각도 확보</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-300">
+                                        <th class="bg-slate-100 p-3.5 border-r border-gray-300 font-bold text-gray-700">인양 능력</th>
+                                        <td class="p-3.5 border-r border-gray-300 font-extrabold text-gray-900">25.0m 리치에서<br>3.0t</td>
+                                        <td class="p-3.5 text-left font-medium text-gray-600 leading-relaxed">3열에서도 전기차/대형 SUV<br>인양 가능</td>
+                                    </tr>
+                                    <tr>
+                                        <th class="bg-slate-100 p-3.5 border-r border-gray-300 font-bold text-gray-700">수직 리프팅</th>
+                                        <td class="p-3.5 border-r border-gray-300 font-extrabold text-gray-900">7.0m 이상 확보</td>
+                                        <td class="p-3.5 text-left font-medium text-gray-600 leading-relaxed">전면 차량 상공 통과 시<br>충돌 및 대물 파손 리스크 방지</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 운영 프로세스 -->
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-900 mb-3">G-Lifter 운영 프로세스</h3>
+                        <div class="bg-white border border-gray-300 rounded-xl shadow-sm p-6 lg:p-8 space-y-6">
+                            <div class="flex gap-4 items-start">
+                                <div class="w-7 h-7 shrink-0 bg-[#0033a0] text-white rounded-full flex items-center justify-center font-black text-sm mt-0.5 shadow-sm">1</div>
+                                <div>
+                                    <p class="font-black text-gray-900 text-[15px] mb-1">진입 및 정차</p>
+                                    <p class="text-sm font-medium text-gray-600">: G-Lifter 차량이 Deep Lane 진입 통로에 정차하여 작업 반경 확보</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4 items-start">
+                                <div class="w-7 h-7 shrink-0 bg-[#0033a0] text-white rounded-full flex items-center justify-center font-black text-sm mt-0.5 shadow-sm">2</div>
+                                <div>
+                                    <p class="font-black text-gray-900 text-[15px] mb-1">붐 전개 및 도달</p>
+                                    <p class="text-sm font-medium text-gray-600">: 너클 붐이 전방 차량들을 가로질러 3열(중심부) 타겟 차량에 도달</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4 items-start">
+                                <div class="w-7 h-7 shrink-0 bg-[#0033a0] text-white rounded-full flex items-center justify-center font-black text-sm mt-0.5 shadow-sm">3</div>
+                                <div>
+                                    <p class="font-black text-gray-900 text-[15px] mb-1">무손상 결속</p>
+                                    <p class="text-sm font-medium text-gray-600">: 휠 리프팅 프레임을 통해 차체 접촉 없이 타이어 4지점 완전 고정</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4 items-start">
+                                <div class="w-7 h-7 shrink-0 bg-[#0033a0] text-white rounded-full flex items-center justify-center font-black text-sm mt-0.5 shadow-sm">4</div>
+                                <div>
+                                    <p class="font-black text-gray-900 text-[15px] mb-1">수직 인양 및 이송</p>
+                                    <p class="text-sm font-medium text-gray-600">: 타겟 차량을 수직으로 인양하여 통로로 즉시 이송</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- [15P] G-Lifter 운영 시뮬레이션 -->
+    <section id="slide15" class="py-24 bg-slate-50 border-t border-gray-200 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="mb-12 flex flex-col md:flex-row md:items-end justify-between border-b-2 border-black pb-4">
+                <h2 class="text-3xl lg:text-4xl font-extrabold text-[#0033a0] tracking-tight">
+                    G-Lifter 운영 시뮬레이션
+                </h2>
+                <span class="text-gray-500 font-bold mt-2 md:mt-0"></span>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-8 mt-12 relative">
+                <!-- Left: 기존 -->
+                <div class="flex flex-col items-center w-full">
+                    <p class="font-bold text-xl text-gray-900 mb-6">[ 기존 셔플링 차량 추출 방식 ]</p>
+                    <div class="w-full mb-6">
+                        <div class="aspect-video rounded-xl overflow-hidden shadow-md border border-gray-200 bg-[#1a233a]">
+                            <video src="VID_1.mp4" autoplay muted loop playsinline class="w-full h-full object-cover"></video>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 w-full">
+                        <div class="flex-1 bg-white border border-gray-200 rounded-full py-4 text-center shadow-sm">
+                            <p class="text-xs text-gray-500 font-bold mb-1">예상 소요 시간</p>
+                            <p class="text-2xl font-black text-red-600">600초</p>
+                        </div>
+                        <div class="flex-1 bg-white border border-gray-200 rounded-full py-4 text-center shadow-sm">
+                            <p class="text-xs text-gray-500 font-bold mb-1">최소 투입 인력</p>
+                            <p class="text-2xl font-black text-red-600">3명</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow Middle -->
+                <div class="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 hidden lg:flex flex-col items-center z-10 bg-white p-4 rounded-full border border-gray-100 shadow-sm">
+                    <span class="text-red-400 font-bold text-base mb-1">약 70% 개선</span>
+                    <svg class="w-12 h-12 text-red-500 fill-current" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+
+                <!-- Right: G-Lifter -->
+                <div class="flex flex-col items-center w-full">
+                    <p class="font-bold text-xl text-gray-900 mb-6">[ G-Lifter 차량 추출 방식 ]</p>
+                    <div class="w-full mb-6">
+                        <div class="aspect-video rounded-xl overflow-hidden shadow-md border border-gray-200 bg-[#1a233a]">
+                            <video src="VID_2.mp4" autoplay muted loop playsinline class="w-full h-full object-cover"></video>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 w-full">
+                        <div class="flex-1 bg-white border border-gray-200 rounded-full py-4 text-center shadow-sm">
+                            <p class="text-xs text-gray-500 font-bold mb-1">예상 소요 시간</p>
+                            <p class="text-2xl font-black text-red-600">180초</p>
+                        </div>
+                        <div class="flex-1 bg-white border border-gray-200 rounded-full py-4 text-center shadow-sm relative">
+                            <p class="text-xs text-gray-500 font-bold mb-1">최소 투입 인력</p>
+                            <p class="text-2xl font-black text-red-600">2명</p>
+                            <span class="absolute -bottom-6 right-0 text-[10px] text-gray-400 font-medium">*타이어 밴드 결속/해체 과정 포함</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-16 w-full bg-[#112a46] text-white py-6 rounded-lg text-center shadow-lg">
+                <p class="text-xl font-bold tracking-wide">G-Lifter 도입으로 소요 시간과 투입 인력을 단축해 하역 효율성 개선</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- [도입 배경의 결론] 왜 G-Lifter Solution인가? -->
+    <section id="placement-plan" class="py-24 bg-white border-t border-gray-200 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl lg:text-4xl font-extrabold text-[#0033a0] tracking-tight mb-4">
+                    왜 G-Lifter Solution인가?
+                </h2>
+                <p class="text-lg text-gray-600 font-medium">
+                    G-Lifter 전면 도입의 한계와 <span class="text-black font-bold">'선별적 투입'</span>의 필요성
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8 mb-12">
+                <!-- Limit Card -->
+                <div class="bg-slate-50 border border-gray-200 p-8 rounded-2xl shadow-sm">
+                    <div class="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
+                        <i data-lucide="x-circle" class="w-8 h-8 text-gray-400"></i>
+                        <h3 class="text-xl font-bold text-gray-800">전 구간 G-Lifter 도입의 한계</h3>
+                    </div>
+                    <ul class="space-y-4 text-gray-600 font-medium">
+                        <li class="flex items-start gap-2">
+                            <span class="text-red-500 font-bold mt-0.5">•</span>
+                            <span><strong class="text-gray-900">과도한 초기 투자비:</strong> 필라델피아 항만 기준 모든 구역 커버 시 크레인 200대 이상 필요</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-red-500 font-bold mt-0.5">•</span>
+                            <span><strong class="text-gray-900">운영 비효율:</strong> 막힌 차량이 1대뿐인 소규모 셔플링은 직접 운전이 크레인보다 신속함.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Strategy Card -->
+                <div class="bg-white border-2 border-[#0033a0] p-8 rounded-2xl shadow-md relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-[#0033a0] text-white text-xs font-bold px-3 py-1 rounded-bl-lg">CORE STRATEGY</div>
+                    <div class="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+                        <i data-lucide="crosshair" class="w-8 h-8 text-[#0033a0]"></i>
+                        <h3 class="text-xl font-bold text-[#0033a0]">취약 구간 중심의 '선별적 투입'</h3>
+                    </div>
+                    <ul class="space-y-4 text-gray-700 font-medium">
+                        <li class="flex items-start gap-2">
+                            <span class="text-[#0033a0] font-bold mt-0.5">➔</span>
+                            <span>셔플링 발생 빈도가 가장 높은 <strong class="text-black">'상습 병목 구간(Hotspot)'</strong>에만 G-Lifter를 집중 배치.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="text-[#0033a0] font-bold mt-0.5">➔</span>
+                            <span>10대 미만의 소수 장비 운용만으로도 비용 절감 및 하역 효율성 극대화 가능.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- The Pitch (Need for Software) -->
+            <div class="bg-[#112a46] rounded-3xl p-10 lg:p-14 shadow-2xl relative overflow-hidden">
+                <div class="absolute inset-0 opacity-10 flex items-center justify-center pointer-events-none">
+                    <i data-lucide="cpu" class="w-96 h-96"></i>
+                </div>
+                
+                <div class="relative z-10">
+                    <div class="inline-flex items-center gap-2 bg-blue-500/20 text-blue-200 px-4 py-1.5 rounded-full text-sm font-bold mb-8 border border-blue-500/30">
+                        <span class="relative flex h-2 w-2">
+                            <span class="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                        SOFTWARE REQUIREMENT
+                    </div>
+                    
+                    <h3 class="text-2xl lg:text-3xl font-extrabold text-white leading-relaxed mb-10 tracking-tight">
+                        <span class="text-cyan-400">G-Lifter Solution</span>는 실시간 데이터 분석을 통해<br/>
+                        <span class="text-yellow-400 underline decoration-2 underline-offset-4">셔플링 핫스팟을 자동 탐지</span>하고<br/>
+                        <span class="text-blue-300 underline decoration-2 underline-offset-4">G-Lifter의 최적 배치 위치</span>를 지시합니다.
+                    </h3>
+                    
+                    <div class="grid md:grid-cols-2 gap-8 mb-10">
+                        <div class="bg-white/10 border border-white/20 p-6 rounded-xl backdrop-blur-sm">
+                            <h4 class="text-yellow-400 font-bold text-xl mb-3 flex items-center gap-2">
+                                <i data-lucide="map" class="w-5 h-5"></i> 셔플링 위험 핫스팟 예측 및 경고
+                            </h4>
+                            <p class="text-gray-300 font-medium leading-relaxed">
+                                입력된 명세서와 현재 야드 점유율 데이터를 알고리즘으로 분석하여, 향후 출고 시 셔플링 발생 빈도가 높은 취약 구간(고위험 블록)을 히트맵 형태로 경고합니다.
+                            </p>
+                        </div>
+                        <div class="bg-white/10 border border-white/20 p-6 rounded-xl backdrop-blur-sm">
+                            <h4 class="text-blue-300 font-bold text-xl mb-3 flex items-center gap-2">
+                                <i data-lucide="crosshair" class="w-5 h-5"></i> G-Lifter 최적 배치 지시
+                            </h4>
+                            <p class="text-gray-300 font-medium leading-relaxed">
+                                전 구간이 아닌 셔플링 집중 위험 구역을 타겟팅하여, 시스템이 자동으로 G-Lifter의 최적 이동 위치를 산출하고 배치 권고 지시를 내립니다.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-white/20 pt-8 text-center">
+                        <h3 class="text-2xl lg:text-3xl font-black text-white tracking-tight">
+                            "이를 통해 <span class="text-red-400 underline decoration-4 underline-offset-4">자동차 하역장 운영 효율을 극대화</span> 합니다."
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- [기대효과] AS-IS vs TO-BE -->
+    <section id="expected-effects" class="py-24 bg-slate-50 border-t border-gray-200 px-6">
+        <div class="max-w-7xl mx-auto">
+            <!-- Header -->
+            <div class="mb-16 flex flex-col items-center justify-center text-center">
+                <h2 class="text-3xl lg:text-4xl font-extrabold text-[#0033a0] tracking-tight mb-4">
+                    G-Lifter Solution 도입 기대효과
+                </h2>
+                <p class="text-lg text-gray-600 font-medium">AS-IS 대비 TO-BE 정량적 / 정성적 개선 지표</p>
+            </div>
+
+            <!-- Table-like Header (우측 상단 '기대효과' 배지 박스 및 글자 완벽 삭제됨) -->
+            <div class="hidden lg:grid grid-cols-12 gap-4 mb-6 relative">
+                <div class="col-span-4 text-center font-black text-gray-500 text-lg border-b-2 border-gray-300 pb-3">AS - IS</div>
+                <div class="col-span-8 border-b-2 border-[#0033a0] pb-3 text-center font-black text-[#0033a0] text-lg">TO - BE</div>
+            </div>
+
+            <!-- List Container -->
+            <div class="space-y-8">
+                
+                <!-- Item 1 -->
+                <div>
+                    <h4 class="font-bold text-lg mb-3 text-gray-900">1. 선박 하역 지연 문제</h4>
+                    <div class="flex flex-col lg:flex-row items-stretch gap-4 lg:gap-6">
+                        <div class="w-full lg:w-[30%] bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex items-center">
+                            <ul class="text-base font-medium text-gray-700 space-y-2 list-disc list-inside pl-2">
+                                <li>선박 접안 및 하역 지연</li>
+                                <li>용선료 매몰 비용 발생 및 선박 회전율 저하</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="hidden lg:flex items-center justify-center text-[#0033a0]">
+                            <i data-lucide="arrow-right" class="w-8 h-8 font-black"></i>
+                        </div>
+                        
+                        <div class="w-full lg:w-[40%] bg-white border border-blue-200 rounded-xl p-5 shadow-sm flex items-center">
+                            <ul class="text-base font-semibold text-gray-900 space-y-2 list-disc list-inside pl-2">
+                                <li>선박 체류 시간 단축</li>
+                                <li>접안 효율 증대</li>
+                                <li class="list-none pl-1 text-blue-700 font-bold mt-3">➔ 매몰 비용 최소화 및 선박 가동 극대화</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="w-full lg:w-[25%] bg-[#0033a0] rounded-xl p-5 shadow-md flex flex-col justify-center items-center text-center text-white">
+                            <p class="font-bold text-base lg:text-lg leading-snug">셔플링 건당 약 <span class="text-yellow-400 text-xl lg:text-2xl font-black ml-1">47% 단축</span></p>
+                            <p class="font-bold text-base lg:text-lg mt-1">연간 약 <span class="text-yellow-400 text-xl lg:text-2xl font-black ml-1">26억원 절감</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Item 2 -->
+                <div>
+                    <h4 class="font-bold text-lg mb-3 text-gray-900">2. 야드 운영 효율 하락</h4>
+                    <div class="flex flex-col lg:flex-row items-stretch gap-4 lg:gap-6">
+                        <div class="w-full lg:w-[30%] bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex items-center">
+                            <ul class="text-base font-medium text-gray-700 space-y-2 list-disc list-inside pl-2">
+                                <li>지면 셔플링 반복에 따른 야드 내 병목 심화</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="hidden lg:flex items-center justify-center text-[#0033a0]">
+                            <i data-lucide="arrow-right" class="w-8 h-8 font-black"></i>
+                        </div>
+                        
+                        <div class="w-full lg:w-[40%] bg-white border border-blue-200 rounded-xl p-5 shadow-sm flex items-center">
+                            <ul class="text-base font-semibold text-gray-900 space-y-2 list-disc list-inside pl-2">
+                                <li>하역 작업 동선 단순화</li>
+                                <li>불필요한 지면 이동 배제를 통한 야드 정체 원천 차단</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="w-full lg:w-[25%] bg-[#0033a0] rounded-xl p-5 shadow-md flex flex-col justify-center items-center text-center text-white">
+                            <p class="font-bold text-base lg:text-lg leading-snug">연간 <span class="text-yellow-400 text-xl lg:text-2xl font-black ml-1">120,000대</span></p>
+                            <p class="font-bold text-base lg:text-lg mt-1">처리비용 절감</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Item 3 -->
+                <div>
+                    <h4 class="font-bold text-lg mb-3 text-gray-900">3. 화주 납기 대응력 약화</h4>
+                    <div class="flex flex-col lg:flex-row items-stretch gap-4 lg:gap-6">
+                        <div class="w-full lg:w-[30%] bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex items-center">
+                            <ul class="text-base font-medium text-gray-700 space-y-2 list-disc list-inside pl-2">
+                                <li>외부 화주 위약금 발생 및 계열 화주 판매 차질 리스크</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="hidden lg:flex items-center justify-center text-[#0033a0]">
+                            <i data-lucide="arrow-right" class="w-8 h-8 font-black"></i>
+                        </div>
+                        
+                        <div class="w-full lg:w-[40%] bg-white border border-blue-200 rounded-xl p-5 shadow-sm flex items-center">
+                            <ul class="text-base font-semibold text-gray-900 space-y-2 list-disc list-inside pl-2">
+                                <li>긴급 출고 대응력 확보</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="w-full lg:w-[25%] bg-[#0033a0] rounded-xl p-5 shadow-md flex flex-col justify-center items-center text-center text-white">
+                            <p class="font-bold text-base lg:text-lg leading-snug">연간 <span class="text-yellow-400 text-xl lg:text-2xl font-black ml-1">600시간</span></p>
+                            <p class="font-bold text-base lg:text-lg mt-1">대응시간 감소</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Item 4 -->
+                <div>
+                    <h4 class="font-bold text-lg mb-3 text-gray-900">4. 항만 인프라 과다사용</h4>
+                    <div class="flex flex-col lg:flex-row items-stretch gap-4 lg:gap-6">
+                        <div class="w-full lg:w-[30%] bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex items-center">
+                            <ul class="text-base font-medium text-gray-700 space-y-2 list-disc list-inside pl-2">
+                                <li>차량 장기 체화 및 선박 장기 체류에 따른 부대비용 발생</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="hidden lg:flex items-center justify-center text-[#0033a0]">
+                            <i data-lucide="arrow-right" class="w-8 h-8 font-black"></i>
+                        </div>
+                        
+                        <div class="w-full lg:w-[40%] bg-white border border-blue-200 rounded-xl p-5 shadow-sm flex items-center">
+                            <ul class="text-base font-semibold text-gray-900 space-y-2 list-disc list-inside pl-2">
+                                <li>출고 지연으로 인한 접안료·체화료 부담 완화</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="w-full lg:w-[25%] bg-[#0033a0] rounded-xl p-5 shadow-md flex flex-col justify-center items-center text-center text-white">
+                            <p class="font-bold text-base lg:text-lg leading-snug">연간 선박 <span class="text-yellow-400 text-xl lg:text-2xl font-black ml-1">13척</span></p>
+                            <p class="font-bold text-base lg:text-lg mt-1">체류 비용 절감 가능</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- [최종 CTA] Run System (마지막 페이지 밑바닥 배치) -->
+    <section class="py-20 bg-white text-center px-6 border-t border-gray-100">
+        <div class="max-w-4xl mx-auto">
+            <a href="./app.html" class="group px-14 py-6 bg-black text-white text-xl font-black rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.2)] hover:bg-gray-800 transition-all transform hover:-translate-y-1 inline-flex items-center gap-4 mx-auto">
+                Run System
+                <i data-lucide="arrow-right" class="w-6 h-6 group-hover:translate-x-2 transition-transform"></i>
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 bg-slate-900 text-gray-400 px-6 text-center text-xs">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 font-medium">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 bg-slate-700 rounded flex items-center justify-center text-white font-bold italic text-[10px]">G</div>
+                <span>© 2026 G-Lifter Solution. Control System for Hyundai Glovis.</span>
+            </div>
+            <div class="flex gap-6 uppercase tracking-wider font-bold">
+                <a href="#" class="hover:text-gray-200 transition-colors">Security Policy</a>
+                <a href="#" class="hover:text-gray-200 transition-colors">System Status</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Initializing Scripts & Three.js Logic -->
+    <script>
+        lucide.createIcons();
+
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+        
+        // ==========================================
+        // Three.js 3D Animation Injection
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                const container = document.getElementById('hero-3d-container');
+                const wrapper = document.getElementById('hero-3d-wrapper');
+                if (!container || !wrapper) return;
+
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x0a1128); 
+                scene.fog = new THREE.Fog(0x0a1128, 150, 1200); 
+
+                let width = wrapper.clientWidth || 500;
+                let height = wrapper.clientHeight || 300;
+
+                const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 4000);
+                camera.position.set(110, 65, 110); 
+                camera.lookAt(0, 10, -200);
+
+                const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+                renderer.setSize(width, height);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); 
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                container.appendChild(renderer.domElement);
+
+                const resizeObserver = new ResizeObserver(entries => {
+                    for (let entry of entries) {
+                        const { width: w, height: h } = entry.contentRect;
+                        if(w > 0 && h > 0) {
+                            camera.aspect = w / h;
+                            camera.updateProjectionMatrix();
+                            renderer.setSize(w, h);
+                        }
+                    }
+                });
+                resizeObserver.observe(wrapper);
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+                scene.add(ambientLight);
+                
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+                dirLight.position.set(200, 350, 250);
+                dirLight.castShadow = true;
+                dirLight.shadow.mapSize.width = 1024; 
+                dirLight.shadow.mapSize.height = 1024;
+                dirLight.shadow.camera.near = 10;
+                dirLight.shadow.camera.far = 1500;
+                dirLight.shadow.camera.left = -600;
+                dirLight.shadow.camera.right = 600;
+                dirLight.shadow.camera.top = 400;
+                dirLight.shadow.camera.bottom = -400;
+                dirLight.shadow.bias = -0.0005;
+                scene.add(dirLight);
+
+                const dock = new THREE.Mesh(
+                    new THREE.BoxGeometry(2500, 20, 1500),
+                    new THREE.MeshStandardMaterial({ color: 0x141e30, roughness: 0.95 })
+                );
+                dock.position.set(0, -10.02, 270); 
+                dock.receiveShadow = true;
+                scene.add(dock);
+
+                const waterGeo = new THREE.PlaneGeometry(8000, 8000);
+                const waterMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.1, metalness: 0.8 });
+                const water = new THREE.Mesh(waterGeo, waterMat);
+                water.rotation.x = -Math.PI / 2;
+                water.position.set(0, -3, 0); 
+                water.receiveShadow = true;
+                scene.add(water);
+
+                function createBuoys() {
+                    const buoyGeo = new THREE.CylinderGeometry(2, 2, 8, 8);
+                    const positions = [ {x: -600, z: -800, c: 0xff0000}, {x: 500, z: -900, c: 0x00ff00}, {x: 150, z: -1200, c: 0xff0000} ];
+                    positions.forEach(p => {
+                        const mesh = new THREE.Mesh(buoyGeo, new THREE.MeshStandardMaterial({color: p.c, emissive: p.c, emissiveIntensity: 0.5}));
+                        mesh.position.set(p.x, -1, p.z);
+                        scene.add(mesh);
+                        const light = new THREE.PointLight(p.c, 2, 300);
+                        light.position.set(p.x, 10, p.z);
+                        scene.add(light);
+                        gsap.to(light, { intensity: 0, duration: 1.5, repeat: -1, yoyo: true, ease: "power1.inOut" });
+                        gsap.to(mesh.material, { emissiveIntensity: 0, duration: 1.5, repeat: -1, yoyo: true, ease: "power1.inOut" });
+                    });
+                }
+                createBuoys();
+
+                const boomAngle = 22 * (Math.PI / 180); 
+                const windowMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 0.9, roughness: 0.1 });
+                const tireMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9 }); 
+                const bumperMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }); 
+                const lightMat = new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffee, emissiveIntensity: 0.6 }); 
+                const tailLightMat = new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0xff0000, emissiveIntensity: 0.6 }); 
+
+                const bonnetGeo = new THREE.BoxGeometry(2.5, 1.1, 3.2);
+                const cabinBaseGeo = new THREE.BoxGeometry(3.8, 1.7, 3.2);
+                const cabinTopGeo = new THREE.BoxGeometry(3.0, 1.1, 2.8);
+                const bumperGeo = new THREE.BoxGeometry(0.4, 0.6, 3.2);
+                const headlightGeo = new THREE.BoxGeometry(0.3, 0.3, 0.6);
+                const taillightGeo = new THREE.BoxGeometry(0.3, 0.3, 0.8);
+                const tireGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.6, 12); 
+
+                function create3DCar() {
+                    const group = new THREE.Group();
+                    const grayVal = 0.3 + Math.random() * 0.5; 
+                    const bodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(grayVal, grayVal, grayVal), metalness: 0.5, roughness: 0.4 });
+                    group.userData = { bodyMat: bodyMat }; 
+
+                    const bonnet = new THREE.Mesh(bonnetGeo, bodyMat);
+                    bonnet.position.set(-2, 1.0, 0); bonnet.castShadow = true; group.add(bonnet);
+                    const cabinBase = new THREE.Mesh(cabinBaseGeo, bodyMat);
+                    cabinBase.position.set(1.15, 1.3, 0); cabinBase.castShadow = true; group.add(cabinBase);
+                    const cabinTop = new THREE.Mesh(cabinTopGeo, windowMat);
+                    cabinTop.position.set(0.9, 2.3, 0); group.add(cabinTop);
+
+                    const frontBumper = new THREE.Mesh(bumperGeo, bumperMat);
+                    frontBumper.position.set(-3.3, 0.8, 0); frontBumper.castShadow = true; group.add(frontBumper);
+                    const rearBumper = new THREE.Mesh(bumperGeo, bumperMat);
+                    rearBumper.position.set(3.1, 0.8, 0); rearBumper.castShadow = true; group.add(rearBumper);
+                    
+                    const hlLeft = new THREE.Mesh(headlightGeo, lightMat); hlLeft.position.set(-3.25, 1.2, 1.0); group.add(hlLeft);
+                    const hlRight = new THREE.Mesh(headlightGeo, lightMat); hlRight.position.set(-3.25, 1.2, -1.0); group.add(hlRight);
+                    const tlLeft = new THREE.Mesh(taillightGeo, tailLightMat); tlLeft.position.set(3.05, 1.3, 1.0); group.add(tlLeft);
+                    const tlRight = new THREE.Mesh(taillightGeo, tailLightMat); tlRight.position.set(3.05, 1.3, -1.0); group.add(tlRight);
+
+                    [{ x: -1.8, z: 1.6 }, { x: 2.5, z: 1.6 }, { x: -1.8, z: -1.6 }, { x: 2.5, z: -1.6 }].forEach(p => {
+                        const tire = new THREE.Mesh(tireGeo, tireMat);
+                        tire.position.set(p.x, 0.8, p.z); tire.rotation.x = Math.PI / 2; tire.castShadow = true; group.add(tire);
+                    });
+                    group.position.y = 0.05; 
+                    return group;
+                }
+
+                function createBackgroundParkingLots() {
+                    const dummy = new THREE.Object3D();
+                    const maxCars = 1500;
+                    
+                    const baseGeo = new THREE.BoxGeometry(3.8, 1.7, 3.2);
+                    const baseMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.3 });
+                    const instancedBase = new THREE.InstancedMesh(baseGeo, baseMat, maxCars);
+                    
+                    const topGeo = new THREE.BoxGeometry(3.0, 1.1, 2.8);
+                    const topMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 0.8 });
+                    const instancedTop = new THREE.InstancedMesh(topGeo, topMat, maxCars);
+                    
+                    const color = new THREE.Color();
+                    let count = 0;
+                    
+                    const zones = [ { startX: -320, cols: 25 }, { startX: 220, cols: 25 } ];
+                    
+                    zones.forEach(zone => {
+                        for(let r = 0; r < 35; r++) { 
+                            for(let c = 0; c < zone.cols; c++) { 
+                                if(Math.random() > 0.15 && count < maxCars) {
+                                    const x = zone.startX + c * 4.0; 
+                                    const z = -60 - r * 9;
+                                    
+                                    dummy.position.set(x, 0.85, z);
+                                    dummy.rotation.y = Math.PI / 2;
+                                    dummy.updateMatrix();
+                                    instancedBase.setMatrixAt(count, dummy.matrix);
+                                    
+                                    const grayVal = 0.2 + Math.random() * 0.6;
+                                    color.setRGB(grayVal, grayVal, grayVal);
+                                    const randColor = Math.random();
+                                    if (randColor > 0.9) color.setHex(0x1e3a8a); 
+                                    else if (randColor > 0.8) color.setHex(0xb91c1c); 
+                                    
+                                    instancedBase.setColorAt(count, color);
+                                    
+                                    dummy.position.y = 2.25;
+                                    dummy.updateMatrix();
+                                    instancedTop.setMatrixAt(count, dummy.matrix);
+                                    
+                                    count++;
+                                }
+                            }
+                        }
+                    });
+                    
+                    instancedBase.castShadow = false; instancedBase.receiveShadow = false;
+                    instancedTop.castShadow = false; instancedTop.receiveShadow = false;
+                    
+                    scene.add(instancedBase);
+                    scene.add(instancedTop);
+                }
+                createBackgroundParkingLots();
+
+                function createCrane3D() {
+                    const truckRoot = new THREE.Group();
+                    
+                    const chassis = new THREE.Mesh(new THREE.BoxGeometry(26, 4.5, 10), new THREE.MeshStandardMaterial({color: 0xe2e8f0}));
+                    chassis.position.y = 5.5; chassis.castShadow = true; truckRoot.add(chassis);
+                    const darkTrim = new THREE.Mesh(new THREE.BoxGeometry(26.2, 1.5, 10.2), new THREE.MeshStandardMaterial({color: 0x1e293b}));
+                    darkTrim.position.y = 4.0; truckRoot.add(darkTrim);
+                    const cabin = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 5), new THREE.MeshStandardMaterial({color: 0xffffff}));
+                    cabin.position.set(9, 10.0, 2.5); cabin.castShadow = true; truckRoot.add(cabin);
+
+                    const tireGeoC = new THREE.CylinderGeometry(2.5, 2.5, 1.5, 16);
+                    [-9, -3, 3, 9].forEach(x => {
+                        [-5.5, 5.5].forEach(z => {
+                            const wheel = new THREE.Mesh(tireGeoC, tireMat);
+                            wheel.rotation.x = Math.PI/2; wheel.position.set(x, 2.5, z); wheel.castShadow = true; truckRoot.add(wheel);
+                            const leg = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3, 1.5), new THREE.MeshStandardMaterial({color: 0x1e293b}));
+                            leg.position.set(x, 4, z < 0 ? -4.5 : 4.5);
+                            truckRoot.add(leg);
+                        });
+                    });
+
+                    const upperBody = new THREE.Group(); 
+                    upperBody.position.set(0, 8.5, 0); 
+                    truckRoot.add(upperBody);
+                    
+                    const turretBase = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 1.0, 24), new THREE.MeshStandardMaterial({color: 0x1e293b}));
+                    turretBase.position.y = -0.5; turretBase.castShadow = true; upperBody.add(turretBase);
+
+                    const boomPivot = new THREE.Group(); boomPivot.rotation.z = boomAngle; upperBody.add(boomPivot);
+                    const boomFixed = new THREE.Mesh(new THREE.BoxGeometry(26, 4.5, 5), new THREE.MeshStandardMaterial({color: 0x94a3b8}));
+                    boomFixed.position.x = 13; boomFixed.castShadow = true; boomPivot.add(boomFixed);
+
+                    const boomExtMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 3.5, 4), new THREE.MeshStandardMaterial({color: 0x475569}));
+                    boomExtMesh.geometry.translate(0.5, 0, 0); boomExtMesh.position.x = 24; boomExtMesh.castShadow = true; boomPivot.add(boomExtMesh);
+
+                    const spreaderJoint = new THREE.Group(); spreaderJoint.position.x = 24 + 5; spreaderJoint.rotation.z = -boomAngle; boomPivot.add(spreaderJoint);
+                    const winchCable = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1), new THREE.MeshStandardMaterial({color: 0x111111}));
+                    winchCable.geometry.translate(0, -0.5, 0); spreaderJoint.add(winchCable);
+
+                    const spreaderGroup = new THREE.Group(); spreaderGroup.position.y = -5; spreaderJoint.add(spreaderGroup);
+                    const spreaderHead = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.2, 5.5), new THREE.MeshStandardMaterial({color: 0x2563eb}));
+                    spreaderHead.castShadow = true; spreaderGroup.add(spreaderHead);
+
+                    const hazardLight = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshStandardMaterial({color: 0xf59e0b, emissive: 0xf59e0b, emissiveIntensity: 1}));
+                    hazardLight.position.set(0, 1.5, 0); spreaderHead.add(hazardLight);
+
+                    const spotLight = new THREE.SpotLight(0xffffff, 0);
+                    spotLight.position.set(0, 0, 0); spotLight.angle = Math.PI / 4; spreaderGroup.add(spotLight);
+                    const targetObj = new THREE.Object3D(); targetObj.position.set(0,-15,0); spreaderGroup.add(targetObj); spotLight.target = targetObj;
+
+                    return { truckRoot, upperBody, boomExtMesh, spreaderJoint, spreaderGroup, winchCable, spotLight, hazardLight };
+                }
+
+                const gridCols = 5; 
+                const gridRows = 29; 
+                const cellX = 8.5; 
+                const cellZ = 4.5; 
+                const colOffsets = [-100, 0, 100]; 
+                const rowOffsets = [-60, -210, -360]; 
+                
+                const blocksData = [];
+                const cranes = [];
+                let shipRadar; 
+                let mainShipGroup; 
+
+                function createGlovisTexture() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 1024;
+                    canvas.height = 256;
+                    const ctx = canvas.getContext('2d');
+                    
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.font = 'bold 150px Arial, sans-serif';
+                    ctx.fillStyle = '#ffffff'; 
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.transform(1, 0, -0.1, 1, 0, 0); 
+                    ctx.fillText('GLOVIS', canvas.width / 2 + 20, canvas.height / 2 + 10);
+                    
+                    const texture = new THREE.CanvasTexture(canvas);
+                    return texture;
+                }
+
+                function createRoRoShip() {
+                    mainShipGroup = new THREE.Group();
+                    
+                    function taperHull(geometry, isLower) {
+                        const pos = geometry.attributes.position;
+                        for(let i = 0; i < pos.count; i++) {
+                            let x = pos.getX(i); let y = pos.getY(i); let z = pos.getZ(i);
+                            if (x < -200) {
+                                let factor = (x + 200) / -225;
+                                pos.setZ(i, z * (1 - factor));
+                                if (isLower && y < 0) pos.setY(i, y + factor * 35); 
+                            }
+                            if (x > 300) {
+                                let factor = (x - 300) / 125; 
+                                pos.setZ(i, z * (1 - factor * 0.15));
+                                if (isLower && y < 0) pos.setY(i, y + factor * 15);
+                            }
+                        }
+                        geometry.computeVertexNormals();
+                        pos.needsUpdate = true;
+                    }
+
+                    const lowerHullGeo = new THREE.BoxGeometry(850, 50, 160, 32, 1, 1);
+                    taperHull(lowerHullGeo, true);
+                    const lowerHull = new THREE.Mesh(lowerHullGeo, new THREE.MeshStandardMaterial({color: 0x0f172a, roughness: 0.8}));
+                    lowerHull.position.set(0, 25, -560); lowerHull.receiveShadow = true; mainShipGroup.add(lowerHull);
+
+                    const upperHullGeo = new THREE.BoxGeometry(850, 70, 160, 32, 1, 1);
+                    taperHull(upperHullGeo, false);
+                    const upperHull = new THREE.Mesh(upperHullGeo, new THREE.MeshStandardMaterial({color: 0x1e3a8a, roughness: 0.6, metalness: 0.2}));
+                    upperHull.position.set(0, 85, -560); upperHull.castShadow = true; upperHull.receiveShadow = true; mainShipGroup.add(upperHull);
+
+                    const logoTexture = createGlovisTexture();
+                    const logoMat = new THREE.MeshBasicMaterial({ map: logoTexture, transparent: true });
+                    const logoPlane = new THREE.Mesh(new THREE.PlaneGeometry(350, 80), logoMat);
+                    logoPlane.position.set(0, 85, -479); 
+                    mainShipGroup.add(logoPlane);
+
+                    const stripeGeo = new THREE.BoxGeometry(852, 2, 162, 32, 1, 1);
+                    taperHull(stripeGeo, false);
+                    const stripe = new THREE.Mesh(stripeGeo, new THREE.MeshStandardMaterial({color: 0xffffff}));
+                    stripe.position.set(0, 120, -560); mainShipGroup.add(stripe);
+                    
+                    const deckGeo = new THREE.BoxGeometry(830, 5, 150, 32, 1, 1);
+                    taperHull(deckGeo, false);
+                    const deck = new THREE.Mesh(deckGeo, new THREE.MeshStandardMaterial({color: 0x334155}));
+                    deck.position.set(-5, 122.5, -560); mainShipGroup.add(deck);
+
+                    const bridgeGroup = new THREE.Group();
+                    bridgeGroup.position.set(250, 125, -560);
+                    
+                    const bridge1 = new THREE.Mesh(new THREE.BoxGeometry(160, 20, 140), new THREE.MeshStandardMaterial({color: 0xe2e8f0}));
+                    bridge1.position.y = 10; bridge1.castShadow = true; bridgeGroup.add(bridge1);
+                    const bridge2 = new THREE.Mesh(new THREE.BoxGeometry(120, 20, 120), new THREE.MeshStandardMaterial({color: 0xe2e8f0}));
+                    bridge2.position.set(10, 30, 0); bridge2.castShadow = true; bridgeGroup.add(bridge2);
+                    const bridge3 = new THREE.Mesh(new THREE.BoxGeometry(90, 20, 140), new THREE.MeshStandardMaterial({color: 0xffffff}));
+                    bridge3.position.set(20, 50, 0); bridge3.castShadow = true; bridgeGroup.add(bridge3);
+                    const windows = new THREE.Mesh(new THREE.BoxGeometry(92, 10, 142), new THREE.MeshStandardMaterial({color: 0x050505, metalness: 0.9, roughness: 0.1}));
+                    windows.position.set(20, 52, 0); bridgeGroup.add(windows);
+
+                    const lifeboatGeo = new THREE.CylinderGeometry(3, 3, 10, 12);
+                    const lifeboatMat = new THREE.MeshStandardMaterial({color: 0xf97316, roughness: 0.5});
+                    [-50, -30, -10].forEach(zOffset => {
+                        const lbLeft = new THREE.Mesh(lifeboatGeo, lifeboatMat); lbLeft.rotation.z = Math.PI / 2; lbLeft.position.set(zOffset, 25, 72); bridgeGroup.add(lbLeft);
+                        const lbRight = new THREE.Mesh(lifeboatGeo, lifeboatMat); lbRight.rotation.z = Math.PI / 2; lbRight.position.set(zOffset, 25, -72); bridgeGroup.add(lbRight);
+                    });
+
+                    const funnelGroup = new THREE.Group(); funnelGroup.position.set(50, 40, 0);
+                    const funnel = new THREE.Mesh(new THREE.CylinderGeometry(15, 20, 60, 16), new THREE.MeshStandardMaterial({color: 0xef4444}));
+                    funnel.rotation.z = -0.15; funnel.castShadow = true; funnelGroup.add(funnel);
+                    const funnelTop = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 10, 16), new THREE.MeshStandardMaterial({color: 0x111111}));
+                    funnelTop.position.set(4, 33, 0); funnelTop.rotation.z = -0.15; funnelGroup.add(funnelTop);
+                    bridgeGroup.add(funnelGroup);
+
+                    const radarMast = new THREE.Mesh(new THREE.CylinderGeometry(1, 2, 40, 8), new THREE.MeshStandardMaterial({color: 0x94a3b8}));
+                    radarMast.position.set(-10, 70, 0); bridgeGroup.add(radarMast);
+                    shipRadar = new THREE.Mesh(new THREE.BoxGeometry(25, 2, 2), new THREE.MeshStandardMaterial({color: 0xffffff}));
+                    shipRadar.position.set(-10, 90, 0); bridgeGroup.add(shipRadar);
+
+                    mainShipGroup.add(bridgeGroup);
+
+                    const rampGroup = new THREE.Group(); rampGroup.position.set(0, 10, -480); 
+                    const rampMain = new THREE.Mesh(new THREE.BoxGeometry(280, 3, 120), new THREE.MeshStandardMaterial({color: 0x334155, roughness: 0.9}));
+                    rampMain.position.z = 60; rampMain.receiveShadow = true; rampGroup.add(rampMain);
+                    const rampLine = new THREE.Mesh(new THREE.BoxGeometry(280, 3.5, 4), new THREE.MeshStandardMaterial({color: 0xfacc15}));
+                    rampLine.position.z = 60; rampGroup.add(rampLine);
+                    rampGroup.rotation.x = -Math.PI / 12; 
+                    
+                    mainShipGroup.add(rampGroup);
+                    scene.add(mainShipGroup);
+                }
+                createRoRoShip();
+
+                function initPort() {
+                    colOffsets.forEach((offsetX) => {
+                        const gridStartX = offsetX - 20;
+                        const aisleX = offsetX + 27; 
+                        let colBlocks = [];
+                        
+                        rowOffsets.forEach((offsetZ) => {
+                            const gridStartZ = offsetZ; 
+                            let cars = [];
+                            
+                            const blockWidth = gridCols * cellX;
+                            const blockDepth = gridRows * cellZ;
+                            const blockCenterX = gridStartX + blockWidth / 2 - cellX / 2;
+                            const blockCenterZ = gridStartZ + blockDepth / 2 - cellZ / 2;
+                            
+                            const lineMatFloor = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.04, transparent: true });
+                            const blockBase = new THREE.Mesh(new THREE.PlaneGeometry(blockWidth, blockDepth), lineMatFloor);
+                            blockBase.rotation.x = -Math.PI / 2;
+                            blockBase.position.set(blockCenterX, 0.02, blockCenterZ);
+                            scene.add(blockBase);
+
+                            for(let r=0; r<gridRows; r++) {
+                                for(let c=0; c<gridCols; c++) {
+                                    if(Math.random() < 0.85) { 
+                                        const mesh = create3DCar();
+                                        const x = gridStartX + c * cellX;
+                                        const z = gridStartZ + r * cellZ; 
+                                        mesh.position.set(x, 0, z);
+                                        scene.add(mesh);
+                                        cars.push({ mesh, x, z });
+                                    }
+                                }
+                            }
+                            colBlocks.push({ cars, gridStartZ, blockCenterX, blockCenterZ, blockWidth, blockDepth });
+                        });
+                        
+                        blocksData.push({ aisleX, colBlocks });
+
+                        const crane = createCrane3D();
+                        scene.add(crane.truckRoot);
+                        crane.truckRoot.rotation.y = -Math.PI / 2; 
+                        
+                        const safeZ = 60 + Math.random() * 40; 
+                        crane.truckRoot.position.set(aisleX, 0, safeZ); 
+                        
+                        cranes.push({ mesh: crane, aisleX: aisleX, safeZ: safeZ, colBlocks: colBlocks });
+                    });
+                }
+
+                function assignTaskToCrane(craneObj) {
+                    let availableBlocks = craneObj.colBlocks.filter(b => b.cars.length > 0);
+                    if (availableBlocks.length === 0) {
+                        setTimeout(() => assignTaskToCrane(craneObj), 3000);
+                        return;
+                    }
+
+                    const randomBlockIndex = Math.floor(Math.random() * availableBlocks.length);
+                    const block = availableBlocks[randomBlockIndex];
+                    
+                    const randomCarIndex = Math.floor(Math.random() * block.cars.length);
+                    const targetCar = block.cars[randomCarIndex];
+                    
+                    targetCar.mesh.userData.bodyMat.color.setHex(0xef4444); 
+
+                    const hotspotGroup = new THREE.Group();
+                    hotspotGroup.position.set(block.blockCenterX, 0.2, block.blockCenterZ);
+
+                    const groundHighlight = new THREE.Mesh(
+                        new THREE.PlaneGeometry(block.blockWidth + 4, block.blockDepth + 4),
+                        new THREE.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0, blending: THREE.AdditiveBlending })
+                    );
+                    groundHighlight.rotation.x = -Math.PI / 2;
+                    hotspotGroup.add(groundHighlight);
+
+                    const scanLine = new THREE.Mesh(
+                        new THREE.BoxGeometry(block.blockWidth + 4, 0.2, 2),
+                        new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0, blending: THREE.AdditiveBlending })
+                    );
+                    scanLine.position.set(0, 0.5, -block.blockDepth / 2);
+                    hotspotGroup.add(scanLine);
+
+                    scene.add(hotspotGroup);
+
+                    const alertTl = gsap.timeline();
+                    alertTl.to(groundHighlight.material, { opacity: 0.15, duration: 0.8, yoyo: true, repeat: -1 });
+                    alertTl.to(scanLine.material, { opacity: 0.9, duration: 0.3 });
+                    alertTl.to(scanLine.position, { z: block.blockDepth / 2, duration: 2.5, yoyo: true, repeat: -1, ease: "linear" }, 0);
+                    
+                    const tl = gsap.timeline();
+                    const crane = craneObj.mesh;
+                    const targetZ = targetCar.z; 
+                    const speed = 1.3; 
+
+                    const driveZTime = Math.max(2.0, Math.abs(targetZ - crane.truckRoot.position.z) / 30) * speed;
+                    tl.to(crane.truckRoot.position, { z: targetZ, duration: driveZTime, ease: "power2.inOut" });
+
+                    const distX = craneObj.aisleX - targetCar.x; 
+                    const L = distX / Math.cos(boomAngle);
+                    const extLength = L - 24; 
+                    
+                    const jointWorldY = 8.5 + (L * Math.sin(boomAngle));
+                    const dropDist = jointWorldY - 12.8; 
+                    const liftHeight = 14; 
+
+                    tl.add(() => { crane.spotLight.intensity = 4; crane.hazardLight.material.emissiveIntensity = 3; });
+                    
+                    tl.to(crane.upperBody.rotation, { y: -Math.PI / 2, duration: 1.2 * speed, ease: "power2.inOut" }, "aim");
+                    tl.to(crane.spreaderJoint.position, { x: L, duration: 1.2 * speed, ease: "power2.inOut" }, "aim");
+                    tl.to(crane.boomExtMesh.scale, { x: Math.max(0.1, extLength), duration: 1.2 * speed, ease: "power2.inOut" }, "aim");
+                    tl.to(crane.spreaderGroup.position, { y: -dropDist, duration: 1.2 * speed, ease: "power2.inOut" }, "aim");
+                    tl.to(crane.winchCable.scale, { y: dropDist, duration: 1.2 * speed, ease: "power2.inOut" }, "aim");
+                    
+                    tl.add(() => { 
+                        alertTl.kill();
+                        scene.remove(hotspotGroup);
+                        
+                        scene.remove(targetCar.mesh);
+                        crane.spreaderGroup.add(targetCar.mesh);
+                        targetCar.mesh.position.set(0, -12.8, 0); 
+                        targetCar.mesh.rotation.set(0, Math.PI, 0); 
+                    });
+
+                    tl.to(crane.spreaderGroup.position, { y: -dropDist + liftHeight, duration: 1.5 * speed, ease: "power2.inOut" }, "lift");
+                    tl.to(crane.winchCable.scale, { y: dropDist - liftHeight, duration: 1.5 * speed, ease: "power2.inOut" }, "lift");
+
+                    const retractL = 26; 
+                    const retractJointWorldY = 8.5 + (retractL * Math.sin(boomAngle));
+                    
+                    tl.to(crane.upperBody.rotation, { y: 0, duration: 1.5 * speed, ease: "power2.inOut" }, "turnToShip");
+                    tl.to(crane.spreaderJoint.position, { x: retractL, duration: 1.5 * speed, ease: "power2.inOut" }, "turnToShip");
+                    tl.to(crane.boomExtMesh.scale, { x: Math.max(0.1, retractL - 24), duration: 1.5 * speed, ease: "power2.inOut" }, "turnToShip");
+                    
+                    const finalDrop = retractJointWorldY - 12.8;
+                    tl.to(crane.spreaderGroup.position, { y: -finalDrop, duration: 2.0 * speed, ease: "power2.inOut" }, "finalDrop");
+                    tl.to(crane.winchCable.scale, { y: finalDrop, duration: 2.0 * speed, ease: "power2.inOut" }, "finalDrop");
+                    
+                    tl.add(() => {
+                        const worldPos = new THREE.Vector3();
+                        const worldQuat = new THREE.Quaternion();
+                        targetCar.mesh.getWorldPosition(worldPos);
+                        targetCar.mesh.getWorldQuaternion(worldQuat);
+
+                        crane.spreaderGroup.remove(targetCar.mesh);
+                        scene.add(targetCar.mesh);
+                        
+                        targetCar.mesh.position.copy(worldPos);
+                        targetCar.mesh.rotation.set(0, Math.PI / 2, 0); 
+                        
+                        gsap.to(crane.spreaderGroup.position, { y: -5, duration: 1.0, ease: "power2.out" }); 
+                        gsap.to(crane.winchCable.scale, { y: 5, duration: 1.0, ease: "power2.out" });
+                        crane.spotLight.intensity = 0; 
+                        crane.hazardLight.material.emissiveIntensity = 1;
+
+                        const carTl = gsap.timeline({ onComplete: () => { scene.remove(targetCar.mesh); } });
+                        const escapeX = craneObj.aisleX + 12; 
+                        
+                        const facingAisleAngle = escapeX > worldPos.x ? Math.PI : 0;
+                        carTl.to(targetCar.mesh.rotation, { y: facingAisleAngle, duration: 0.5, ease: "power2.inOut" });
+                        
+                        carTl.to(targetCar.mesh.position, { x: escapeX, duration: 1.5, ease: "power1.inOut" });
+                        
+                        carTl.to(targetCar.mesh.rotation, { y: Math.PI / 2, duration: 0.8, ease: "power2.inOut" });
+                        
+                        const driveStraightDist = Math.abs(-420 - worldPos.z);
+                        carTl.to(targetCar.mesh.position, { z: -420, duration: driveStraightDist / 35, ease: "linear" });
+                        
+                        const facingCenterAngle = escapeX > 0 ? 0 : Math.PI; 
+                        carTl.to(targetCar.mesh.rotation, { y: facingCenterAngle, duration: 0.8, ease: "power2.inOut" });
+                        
+                        carTl.to(targetCar.mesh.position, { x: 0, duration: Math.abs(escapeX) / 30, ease: "linear" });
+                        
+                        carTl.to(targetCar.mesh.rotation, { y: Math.PI / 2, duration: 0.8, ease: "power2.inOut" });
+                        carTl.to(targetCar.mesh.position, { z: -480, duration: 60 / 30, ease: "linear" });
+                        carTl.to(targetCar.mesh.position, { z: -550, y: 15, duration: 2.0, ease: "power1.out" });
+
+                        block.cars.splice(randomCarIndex, 1); 
+                    });
+
+                    const returnZTime = Math.max(2.0, Math.abs(craneObj.safeZ - targetZ) / 30) * speed;
+                    tl.to(crane.truckRoot.position, { z: craneObj.safeZ, duration: returnZTime, ease: "power2.inOut" }, "+=2.0"); 
+                    
+                    tl.add(() => {
+                        const randomDelay = 0.5 + Math.random() * 2.5;
+                        gsap.delayedCall(randomDelay, () => { assignTaskToCrane(craneObj); });
+                    });
+                }
+
+                function animate() {
+                    requestAnimationFrame(animate);
+                    
+                    const time = Date.now() * 0.00015;
+                    camera.position.x = 100 + Math.sin(time) * 15;
+                    camera.position.y = 65 + Math.sin(time * 0.5) * 5; 
+                    camera.position.z = 90 + Math.cos(time * 0.8) * 15;
+                    camera.lookAt(0, 10, -200);
+
+                    if(shipRadar) shipRadar.rotation.y -= 0.05;
+
+                    if(mainShipGroup) {
+                        mainShipGroup.position.y = -2 + Math.sin(time * 5) * 1.5; 
+                        mainShipGroup.rotation.z = Math.sin(time * 3) * 0.005; 
+                    }
+
+                    renderer.render(scene, camera);
+                }
+
+                initPort();
+                animate();
+                
+                cranes.forEach((craneObj, idx) => {
+                    setTimeout(() => assignTaskToCrane(craneObj), 1000 + (Math.random() * 5000));
+                });
+            } catch (error) {
+                console.error("3D 렌더링 중 오류 발생:", error);
+            }
+        });
+    </script>
 </body>
 </html>

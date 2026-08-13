@@ -10,7 +10,13 @@ export default defineConfig(({ mode }) => {
     base: './',
     build: {
       outDir: 'dist',
-      target: 'es2020'
+      target: 'es2020',
+      rollupOptions: {
+        input: {
+          index: path.resolve(__dirname, 'index.html'),   // 랜딩 (Run System → app.html)
+          app: path.resolve(__dirname, 'app.html')        // main.ts 시뮬레이션
+        }
+      }
     },
     define: {
       __GEMINI_API_KEY__: JSON.stringify(apiKey),
